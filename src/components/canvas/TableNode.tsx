@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Group, Rect, Ellipse, Circle, Text, Path, Transformer } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import type { ChairStyle, TableModel } from "../../types";
+import type { ChairStyle, Side, TableModel } from "../../types";
 import { CHAIR_RADIUS } from "../../constants";
 import { computeChairs, isTight } from "../../geometry";
 import type { Palette } from "../../theme";
@@ -29,6 +29,7 @@ interface Props {
   palette: Palette;
   projectChairStyle: ChairStyle;
   minSpacing: number;
+  weldedSides: Side[];
   onSelect: (id: string, additive: boolean) => void;
   onDragStartTable: (id: string) => void;
   onDragMove: (id: string, x: number, y: number) => void;
@@ -49,6 +50,7 @@ export function TableNode({
   palette,
   projectChairStyle,
   minSpacing,
+  weldedSides,
   onSelect,
   onDragStartTable,
   onDragMove,
@@ -83,9 +85,9 @@ export function TableNode({
       rotation: node.rotation(),
     });
   };
-  const tight = isTight(table, minSpacing);
+  const tight = isTight(table, minSpacing, weldedSides);
   const chairStyle: ChairStyle = table.chairStyle ?? projectChairStyle;
-  const chairs = computeChairs(table);
+  const chairs = computeChairs(table, weldedSides);
   const label = table.name.trim() || `${t("table.word")} ${table.number}`;
 
   const stroke = selected

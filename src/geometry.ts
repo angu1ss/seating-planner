@@ -1,4 +1,4 @@
-import type { Side, TableModel } from "./types";
+import type { PathPoint, Side, TableModel } from "./types";
 import { CHAIR_OFFSET, CHAIR_RADIUS } from "./constants";
 
 /** Clearance (meters) needed between two tables' chair rings to sit down / pass. */
@@ -19,35 +19,36 @@ function sideLength(table: TableModel, side: Side): number {
   return side === "top" || side === "bottom" ? table.w : table.h;
 }
 
-function activeSides(table: TableModel): Side[] {
-  return RECT_SIDES.filter((s) => !table.disabledSides.includes(s));
+/** Sides available for seating: not user-disabled and not blocked by a welded neighbour. */
+function activeSides(table: TableModel, extra: Side[] = []): Side[] {
+  return RECT_SIDES.filter((s) => !table.disabledSides.includes(s) && !extra.includes(s));
 }
 
-/** Active perimeter available for seating, in meters. */
-export function activePerimeter(table: TableModel): number {
+/** Active perimeter available for seating, in meters. `extra` = sides blocked by a weld. */
+export function activePerimeter(table: TableModel, extra: Side[] = []): number {
   if (table.shape === "ellipse") {
     const a = table.w / 2;
     const b = table.h / 2;
     // Ramanujan approximation of ellipse perimeter.
     return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
   }
-  return activeSides(table).reduce((sum, s) => sum + sideLength(table, s), 0);
+  return activeSides(table, extra).reduce((sum, s) => sum + sideLength(table, s), 0);
 }
 
 /** Actual spacing between adjacent guests, meters. */
-export function seatSpacing(table: TableModel): number {
+export function seatSpacing(table: TableModel, extra: Side[] = []): number {
   const n = Math.max(table.seatCount, 1);
-  return activePerimeter(table) / n;
+  return activePerimeter(table, extra) / n;
 }
 
-export function isTight(table: TableModel, minSpacing: number): boolean {
+export function isTight(table: TableModel, minSpacing: number, extra: Side[] = []): boolean {
   if (table.seatCount <= 0) return false;
-  return seatSpacing(table) < minSpacing - 1e-9;
+  return seatSpacing(table, extra) < minSpacing - 1e-9;
 }
 
-export function maxComfortableSeats(table: TableModel, minSpacing: number): number {
+export function maxComfortableSeats(table: TableModel, minSpacing: number, extra: Side[] = []): number {
   if (minSpacing <= 0) return table.seatCount;
-  return Math.max(0, Math.floor(activePerimeter(table) / minSpacing));
+  return Math.max(0, Math.floor(activePerimeter(table, extra) / minSpacing));
 }
 
 /** Largest-remainder apportionment of `total` across positive `weights`. */
@@ -69,6 +70,21 @@ function apportion(total: number, weights: number[]): number[] {
 
 /** Half-extent of a table including its chair ring, meters (axis-aligned approx). */
 export function tableOuterExtent(table: TableModel): { rx: number; ry: number } {
+  if (table.shape === "snake" && table.path && table.path.length >= 2) {
+    const dense = snakeCenterline(table.path);
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of dense) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    const pad = table.h / 2 + CHAIR_OFFSET + CHAIR_RADIUS;
+    return { rx: Math.max(maxX, -minX) + pad, ry: Math.max(maxY, -minY) + pad };
+  }
   const pad = CHAIR_OFFSET + CHAIR_RADIUS;
   return { rx: table.w / 2 + pad, ry: table.h / 2 + pad };
 }
@@ -84,6 +100,7 @@ export function tooCloseTables(tables: TableModel[], clearance = AISLE_CLEARANCE
     for (let j = i + 1; j < tables.length; j++) {
       const a = tables[i];
       const b = tables[j];
+      if (a.groupId && a.groupId === b.groupId) continue; // welded — meant to touch
       const ea = tableOuterExtent(a);
       const eb = tableOuterExtent(b);
       if (
@@ -166,8 +183,8 @@ export function findFreeSpot(
 
 const SIDE_ROTATION: Record<Side, number> = { top: 0, right: 90, bottom: 180, left: 270 };
 
-/** Compute chair positions (local, unrotated) for a table. */
-export function computeChairs(table: TableModel): ChairPos[] {
+/** Compute chair positions (local, unrotated) for a table. `extra` = sides blocked by a weld. */
+export function computeChairs(table: TableModel, extra: Side[] = []): ChairPos[] {
   const n = Math.max(0, Math.floor(table.seatCount));
   if (n === 0) return [];
 
@@ -188,7 +205,7 @@ export function computeChairs(table: TableModel): ChairPos[] {
   }
 
   // Rectangle: spread seats across active sides proportional to side length.
-  const sides = activeSides(table);
+  const sides = activeSides(table, extra);
   if (sides.length === 0) return [];
   const counts = apportion(n, sides.map((s) => sideLength(table, s)));
   const hw = table.w / 2;
@@ -223,5 +240,307 @@ export function computeChairs(table: TableModel): ChairPos[] {
     }
   });
 
+  return chairs;
+}
+
+// ─── Welding (joining tables edge-to-edge) ───────────────────────────────────
+
+/** Max perpendicular gap (m) at which a dragged table snaps/welds to a neighbour. */
+export const WELD_SNAP = 0.3;
+/** Tolerance (m) for treating an existing edge pair as "welded" (seats hidden there). */
+const WELD_TOL = 0.18;
+/** Minimum along-edge overlap (m) for two edges to count as joined. */
+const WELD_MIN_OVERLAP = 0.2;
+
+const norm360 = (deg: number) => ((deg % 360) + 360) % 360;
+
+/** Rotate a vector by `deg` degrees. */
+function rot(x: number, y: number, deg: number): { x: number; y: number } {
+  const r = (deg * Math.PI) / 180;
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  return { x: x * c - y * s, y: x * s + y * c };
+}
+
+/** True when `deg` is a multiple of 90° (so two rect edges stay axis-aligned in each other's frame). */
+function isQuarterTurn(deg: number): boolean {
+  const d = norm360(deg);
+  return d < 1 || Math.abs(d - 90) < 1 || Math.abs(d - 180) < 1 || Math.abs(d - 270) < 1;
+}
+
+/** Rect tables can weld when their orientations differ by a multiple of 90° (parallel or perpendicular). */
+export function canWeld(a: TableModel, b: TableModel): boolean {
+  return a.shape === "rect" && b.shape === "rect" && isQuarterTurn(a.rotation - b.rotation);
+}
+
+/** Half-extents along x/y of a rect table seen from a frame rotated by `relDeg` (0/90/180/270). */
+function halfExtents(table: TableModel, relDeg: number): { hw: number; hh: number } {
+  const d = norm360(relDeg);
+  const perpendicular = Math.abs(d - 90) < 1 || Math.abs(d - 270) < 1;
+  return perpendicular ? { hw: table.h / 2, hh: table.w / 2 } : { hw: table.w / 2, hh: table.h / 2 };
+}
+
+/**
+ * Sides of `table` that are joined to a same-group neighbour (so they should carry no chairs).
+ * `group` is the list of weld-group members (may include `table` itself).
+ */
+export function weldedSidesFor(table: TableModel, group: TableModel[]): Side[] {
+  const out = new Set<Side>();
+  for (const n of group) {
+    if (n.id === table.id || !canWeld(table, n)) continue;
+    // Neighbour centre in `table`'s local (unrotated) frame.
+    const d = rot(n.x - table.x, n.y - table.y, -table.rotation);
+    const { hw: nhw, hh: nhh } = halfExtents(n, n.rotation - table.rotation);
+    const sumX = table.w / 2 + nhw;
+    const sumY = table.h / 2 + nhh;
+    const overlapAlongY = Math.abs(d.y) < sumY - WELD_MIN_OVERLAP; // for left/right edges
+    const overlapAlongX = Math.abs(d.x) < sumX - WELD_MIN_OVERLAP; // for top/bottom edges
+    if (Math.abs(d.x - sumX) <= WELD_TOL && overlapAlongY) out.add("right");
+    else if (Math.abs(d.x + sumX) <= WELD_TOL && overlapAlongY) out.add("left");
+    else if (Math.abs(d.y - sumY) <= WELD_TOL && overlapAlongX) out.add("bottom");
+    else if (Math.abs(d.y + sumY) <= WELD_TOL && overlapAlongX) out.add("top");
+  }
+  return [...out];
+}
+
+export interface WeldSnap {
+  neighborId: string;
+  x: number;
+  y: number;
+}
+
+/**
+ * Find the best edge of a candidate neighbour to snap a dragged rect table flush against.
+ * Returns the snapped centre (meters) + neighbour id, or null if nothing is close enough.
+ */
+export function findWeldSnap(
+  dragged: TableModel,
+  x: number,
+  y: number,
+  candidates: TableModel[],
+): WeldSnap | null {
+  if (dragged.shape !== "rect") return null;
+  let best: (WeldSnap & { dist: number }) | null = null;
+  for (const n of candidates) {
+    if (n.id === dragged.id || !canWeld(dragged, n)) continue;
+    // Dragged centre in neighbour's local frame.
+    const d = rot(x - n.x, y - n.y, -n.rotation);
+    const { hw: dhw, hh: dhh } = halfExtents(dragged, dragged.rotation - n.rotation);
+    const sumX = n.w / 2 + dhw;
+    const sumY = n.h / 2 + dhh;
+    const options = [
+      { lx: sumX, ly: d.y, perp: Math.abs(d.x - sumX), overlap: Math.abs(d.y) < sumY - WELD_MIN_OVERLAP },
+      { lx: -sumX, ly: d.y, perp: Math.abs(d.x + sumX), overlap: Math.abs(d.y) < sumY - WELD_MIN_OVERLAP },
+      { lx: d.x, ly: sumY, perp: Math.abs(d.y - sumY), overlap: Math.abs(d.x) < sumX - WELD_MIN_OVERLAP },
+      { lx: d.x, ly: -sumY, perp: Math.abs(d.y + sumY), overlap: Math.abs(d.x) < sumX - WELD_MIN_OVERLAP },
+    ];
+    for (const o of options) {
+      if (!o.overlap || o.perp > WELD_SNAP) continue;
+      const w = rot(o.lx, o.ly, n.rotation); // back to world
+      const snap = {
+        neighborId: n.id,
+        x: Number((n.x + w.x).toFixed(3)),
+        y: Number((n.y + w.y).toFixed(3)),
+        dist: o.perp,
+      };
+      if (!best || snap.dist < best.dist) best = snap;
+    }
+  }
+  return best ? { neighborId: best.neighborId, x: best.x, y: best.y } : null;
+}
+
+// ─── Snake table (serpentine, spline through nodes) ──────────────────────────
+
+/** Samples per segment for the Catmull-Rom centreline. */
+const SNAKE_SAMPLES = 18;
+
+function catmull(p0: PathPoint, p1: PathPoint, p2: PathPoint, p3: PathPoint, t: number): PathPoint {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return {
+    x:
+      0.5 *
+      (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+    y:
+      0.5 *
+      (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+  };
+}
+
+/** Dense polyline along the Catmull-Rom spline through `path` (local meters). */
+export function snakeCenterline(path: PathPoint[], perSeg = SNAKE_SAMPLES): PathPoint[] {
+  if (path.length < 2) return path.slice();
+  const out: PathPoint[] = [];
+  for (let i = 0; i < path.length - 1; i++) {
+    const p0 = path[i - 1] ?? path[i];
+    const p1 = path[i];
+    const p2 = path[i + 1];
+    const p3 = path[i + 2] ?? path[i + 1];
+    for (let s = 0; s < perSeg; s++) out.push(catmull(p0, p1, p2, p3, s / perSeg));
+  }
+  out.push(path[path.length - 1]);
+  return out;
+}
+
+function cumulative(dense: PathPoint[]): number[] {
+  const cum = [0];
+  for (let i = 1; i < dense.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(dense[i].x - dense[i - 1].x, dense[i].y - dense[i - 1].y));
+  }
+  return cum;
+}
+
+/** Total centreline length (meters). */
+export function snakeLength(path: PathPoint[]): number {
+  if (path.length < 2) return 0;
+  const cum = cumulative(snakeCenterline(path));
+  return cum[cum.length - 1];
+}
+
+/** Re-centre the path on its bounding box; returns the centred path + the centre shift (meters). */
+export function normalizeSnakePath(path: PathPoint[]): { path: PathPoint[]; dx: number; dy: number } {
+  if (path.length < 2) return { path, dx: 0, dy: 0 };
+  const dense = snakeCenterline(path);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of dense) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  }
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  return { path: path.map((p) => ({ x: p.x - cx, y: p.y - cy })), dx: cx, dy: cy };
+}
+
+/** Insert a node on the segment nearest to `at` (local meters). */
+export function insertSnakeNode(path: PathPoint[], at: PathPoint): PathPoint[] {
+  if (path.length < 2) return [...path, at];
+  let bestI = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < path.length - 1; i++) {
+    const d = pointSegDist(at, path[i], path[i + 1]);
+    if (d < bestD) {
+      bestD = d;
+      bestI = i;
+    }
+  }
+  const np = path.slice();
+  np.splice(bestI + 1, 0, at);
+  return np;
+}
+
+function pointSegDist(p: PathPoint, a: PathPoint, b: PathPoint): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy || 1e-9;
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/**
+ * Chairs for a snake table (local coords, relative to table centre).
+ *
+ * Each enabled side is treated as its own offset curve. Seats are spread evenly along
+ * the *seatable* part of that curve (the inner corner of a tight bend is excluded), and
+ * the total seat count is split between the two sides in proportion to their seatable
+ * length — so the longer (outer) side of a bend gets more seats and nothing bunches up.
+ */
+export function computeSnakeChairs(table: TableModel): ChairPos[] {
+  const path = table.path;
+  if (!path || path.length < 2) return [];
+  const total = Math.max(0, Math.floor(table.seatCount));
+  if (total === 0) return [];
+  const dense = snakeCenterline(path);
+  const M = dense.length;
+  if (M < 2) return [];
+  const off = table.h / 2 + CHAIR_OFFSET;
+  const innerLimit = off + 2 * CHAIR_RADIUS;
+
+  // Unit tangent at each dense point.
+  const tang = dense.map((_, i) => {
+    const a = dense[Math.max(0, i - 1)];
+    const b = dense[Math.min(M - 1, i + 1)];
+    const tx = b.x - a.x;
+    const ty = b.y - a.y;
+    const len = Math.hypot(tx, ty) || 1;
+    return { tx: tx / len, ty: ty / len };
+  });
+  // Local turn direction & radius of curvature at each point.
+  const W = 4;
+  const curv = dense.map((_, i) => {
+    const a = tang[Math.max(0, i - W)];
+    const b = tang[Math.min(M - 1, i + W)];
+    const dth = Math.atan2(a.tx * b.ty - a.ty * b.tx, a.tx * b.tx + a.ty * b.ty);
+    let ds = 0;
+    for (let j = Math.max(0, i - W); j < Math.min(M - 1, i + W); j++) {
+      ds += Math.hypot(dense[j + 1].x - dense[j].x, dense[j + 1].y - dense[j].y);
+    }
+    const radius = Math.abs(dth) > 1e-4 ? ds / Math.abs(dth) : Infinity;
+    return { turn: Math.sign(dth), radius };
+  });
+
+  const signs: number[] = [];
+  if (!table.disabledSides.includes("right")) signs.push(1);
+  if (!table.disabledSides.includes("left")) signs.push(-1);
+  if (!signs.length) return [];
+
+  interface OffPt {
+    x: number;
+    y: number;
+    rot: number;
+    valid: boolean;
+  }
+  interface Seg {
+    i0: number;
+    i1: number;
+    startArc: number;
+    len: number;
+  }
+  const sideData = signs.map((sign) => {
+    const pts: OffPt[] = dense.map((p, i) => {
+      const { tx, ty } = tang[i];
+      const nx = ty * sign;
+      const ny = -tx * sign;
+      const concave = sign * curv[i].turn < 0;
+      const valid = !(concave && curv[i].radius < innerLimit); // inner-corner fold → unseatable
+      return { x: p.x + nx * off, y: p.y + ny * off, rot: (Math.atan2(ny, nx) * 180) / Math.PI + 90, valid };
+    });
+    const seg: Seg[] = [];
+    let validLen = 0;
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i].valid && pts[i - 1].valid) {
+        const len = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        seg.push({ i0: i - 1, i1: i, startArc: validLen, len });
+        validLen += len;
+      }
+    }
+    return { pts, seg, validLen };
+  });
+
+  const counts = apportion(total, sideData.map((s) => s.validLen));
+  const chairs: ChairPos[] = [];
+  sideData.forEach((sd, idx) => {
+    const k = counts[idx];
+    if (k <= 0 || sd.validLen <= 0 || sd.seg.length === 0) return;
+    for (let i = 0; i < k; i++) {
+      const target = ((i + 0.5) / k) * sd.validLen;
+      let seg = sd.seg[sd.seg.length - 1];
+      for (const s of sd.seg) {
+        if (target <= s.startArc + s.len) {
+          seg = s;
+          break;
+        }
+      }
+      const f = seg.len > 1e-9 ? (target - seg.startArc) / seg.len : 0;
+      const a = sd.pts[seg.i0];
+      const b = sd.pts[seg.i1];
+      chairs.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, rotation: a.rot });
+    }
+  });
   return chairs;
 }

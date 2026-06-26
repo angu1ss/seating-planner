@@ -19,6 +19,8 @@ import {
   faQuestion,
   faRotateLeft,
   faRotateRight,
+  faLink,
+  faLinkSlash,
   faMasksTheater,
   faDisplay,
   faPersonChalkboard,
@@ -52,7 +54,9 @@ export type UiIconName =
   | "undo"
   | "redo"
   | "settings"
-  | "edit";
+  | "edit"
+  | "weld"
+  | "unweld";
 
 export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   import: faFileImport,
@@ -75,6 +79,8 @@ export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   redo: faRotateRight,
   settings: faGear,
   edit: faPenToSquare,
+  weld: faLink,
+  unweld: faLinkSlash,
 };
 
 export const OBJECT_ICONS: Record<SceneObjectType, IconDefinition> = {

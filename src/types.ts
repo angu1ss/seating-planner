@@ -1,10 +1,16 @@
 // Data model for the seating planner.
 // All spatial values are in METERS. The canvas multiplies by scale (px per meter).
 
-export type TableShape = "rect" | "ellipse";
+export type TableShape = "rect" | "ellipse" | "snake";
 export type ChairStyle = "round" | "square";
 export type Theme = "light" | "dark";
 export type Side = "top" | "right" | "bottom" | "left";
+
+/** A node on a snake table's centreline, in meters relative to the table centre. */
+export interface PathPoint {
+  x: number;
+  y: number;
+}
 
 export interface Seat {
   id: string;
@@ -35,10 +41,17 @@ export interface TableModel {
   isPodium: boolean;
   /** null = inherit project chair style; otherwise override. */
   chairStyle: ChairStyle | null;
-  /** Sides with seating disabled (rect only, for now). */
+  /**
+   * Rect: sides with seating disabled. Snake: which of the two long sides are off
+   * ("left" / "right" relative to the path direction).
+   */
   disabledSides: Side[];
   /** When locked, the table can't be moved/edited/deleted — only selected to unlock. */
   locked: boolean;
+  /** Weld group: tables sharing a non-null id are joined and move/rotate together. */
+  groupId: string | null;
+  /** Snake tables only: centreline nodes (meters, relative to centre, bbox-centred). `h` = band width. */
+  path?: PathPoint[];
 }
 
 export type SceneObjectType =

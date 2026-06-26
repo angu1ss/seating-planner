@@ -233,12 +233,25 @@ input, select {
   cursor: pointer;
 }
 .stepper-val { font-size: 18px; font-weight: 700; min-width: 28px; text-align: center; }
+.stepper button:disabled { opacity: 0.45; cursor: default; }
+.stepper-input {
+  width: 56px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+}
 
 .sides { margin-top: 10px; }
 .sides-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 
 .row-actions { display: flex; gap: 10px; }
 .row-actions .btn { flex: 1; justify-content: center; }
+.actions-col { display: flex; flex-direction: column; gap: 10px; }
 .modal-body .row-actions { margin-top: 10px; }
 .modal-body .row-actions .btn { padding: 10px 14px; }
 

@@ -1,16 +1,25 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Stage, Layer, Rect, Line } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import type { TableModel } from "../../types";
+import type { Side, TableModel } from "../../types";
 import { useStore, undo, redo, activeSheet, useCanUndo, useCanRedo } from "../../store";
 import { getPalette } from "../../theme";
 import { useT, useI18n } from "../../i18n";
-import { clampTableCenter, findFreeSpot, tableOuterExtent, tablesOverlap, tooCloseTables } from "../../geometry";
+import {
+  clampTableCenter,
+  findFreeSpot,
+  findWeldSnap,
+  tableOuterExtent,
+  tablesOverlap,
+  tooCloseTables,
+  weldedSidesFor,
+} from "../../geometry";
 import { objectLabelKey } from "../../constants";
 import { downloadJSON, slugify } from "../../utils/file";
 import { Icon } from "../Icon";
 import { TabBar } from "../panels/TabBar";
 import { TableNode } from "./TableNode";
+import { SnakeNode } from "./SnakeNode";
 import { ObjectNode } from "./ObjectNode";
 
 /** Pixels per meter at zoom = 1. */
@@ -20,6 +29,8 @@ const MAX_SCALE = 8;
 const ZOOM_FACTOR = 1.08;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+const NO_SIDES: Side[] = [];
 
 interface KbActions {
   copySelected: () => void;
@@ -90,6 +101,11 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
   const clearSelection = useStore((s) => s.clearSelection);
   const updateTable = useStore((s) => s.updateTable);
   const setPositions = useStore((s) => s.setPositions);
+  const weldTables = useStore((s) => s.weldTables);
+  const moveSnakeNode = useStore((s) => s.moveSnakeNode);
+  const commitSnakeNode = useStore((s) => s.commitSnakeNode);
+  const addSnakeNode = useStore((s) => s.addSnakeNode);
+  const removeSnakeNode = useStore((s) => s.removeSnakeNode);
   const copySelected = useStore((s) => s.copySelected);
   const pasteClipboard = useStore((s) => s.pasteClipboard);
   const duplicateSelected = useStore((s) => s.duplicateSelected);
@@ -225,10 +241,22 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
   };
 
   const handleDragStart = (id: string) => {
-    const sel = selectedIds.includes(id) ? selectedIds : [id];
     const byId = new Map(tables.map((tb) => [tb.id, tb]));
+    const base = selectedIds.includes(id) ? selectedIds : [id];
+    // Expand the moved set so whole weld groups travel together.
+    const set = new Set<string>();
+    const addGroup = (tb: TableModel) => {
+      if (tb.groupId) tables.forEach((m) => m.groupId === tb.groupId && set.add(m.id));
+      else set.add(tb.id);
+    };
+    for (const sid of base) {
+      const tb = byId.get(sid);
+      if (tb) addGroup(tb);
+    }
+    const d0 = byId.get(id);
+    if (d0) addGroup(d0);
     const starts: Record<string, { x: number; y: number }> = {};
-    for (const sid of sel) {
+    for (const sid of set) {
       const tt = byId.get(sid);
       if (tt && !tt.locked) starts[sid] = { x: tt.x, y: tt.y };
     }
@@ -280,14 +308,38 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
     const others = tables.filter((tb) => !movedSet.has(tb.id));
 
     if (gd && movedIds.length > 1) {
-      const dx = x - gd.draggedStart.x;
-      const dy = y - gd.draggedStart.y;
+      // Move the whole set by ONE shared delta (snapped via the dragged table) so welded
+      // tables keep their exact relative positions instead of each snapping independently.
+      const draggedTbl = byId.get(id)!;
+      const snapped = placeInside(draggedTbl, x, y);
+      let dx = snapped.x - gd.draggedStart.x;
+      let dy = snapped.y - gd.draggedStart.y;
+      // Shift the delta so the group's bounding box stays within the walls.
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const sid of movedIds) {
+        const tbl = byId.get(sid)!;
+        const e = tableOuterExtent(tbl);
+        minX = Math.min(minX, gd.starts[sid].x + dx - e.rx);
+        maxX = Math.max(maxX, gd.starts[sid].x + dx + e.rx);
+        minY = Math.min(minY, gd.starts[sid].y + dy - e.ry);
+        maxY = Math.max(maxY, gd.starts[sid].y + dy + e.ry);
+      }
+      if (minX < 0) dx += -minX;
+      else if (maxX > venue.width) dx += venue.width - maxX;
+      if (minY < 0) dy += -minY;
+      else if (maxY > venue.height) dy += venue.height - maxY;
       const proposed = movedIds.map((sid) => {
         const tbl = byId.get(sid)!;
-        const nx = sid === id ? x : gd.starts[sid].x + dx;
-        const ny = sid === id ? y : gd.starts[sid].y + dy;
-        const p = placeInside(tbl, nx, ny);
-        return { id: sid, w: tbl.w, h: tbl.h, x: p.x, y: p.y };
+        return {
+          id: sid,
+          w: tbl.w,
+          h: tbl.h,
+          x: Number((gd.starts[sid].x + dx).toFixed(3)),
+          y: Number((gd.starts[sid].y + dy).toFixed(3)),
+        };
       });
       const collision = proposed.some((p) =>
         others.some((o) => tablesOverlap({ x: p.x, y: p.y, w: p.w, h: p.h }, o)),
@@ -300,6 +352,21 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
     } else {
       const tbl = byId.get(id);
       if (!tbl) return;
+      // Magnetic weld: snap flush to a compatible neighbour edge and join the group.
+      const snap = findWeldSnap(tbl, x, y, others);
+      if (snap) {
+        const e = tableOuterExtent(tbl);
+        const sx = clampTableCenter(snap.x, e.rx, venue.width);
+        const sy = clampTableCenter(snap.y, e.ry, venue.height);
+        const stillFlush = Math.abs(sx - snap.x) < 1e-6 && Math.abs(sy - snap.y) < 1e-6;
+        const blocked = others.some(
+          (o) => o.id !== snap.neighborId && tablesOverlap({ x: sx, y: sy, w: tbl.w, h: tbl.h }, o),
+        );
+        if (stillFlush && !blocked) {
+          weldTables(id, snap.neighborId, { x: sx, y: sy });
+          return;
+        }
+      }
       const p = placeInside(tbl, x, y);
       const overlaps = others.some((o) => tablesOverlap({ x: p.x, y: p.y, w: tbl.w, h: tbl.h }, o));
       updateTable(id, overlaps ? findFreeSpot(others, tbl.w, tbl.h, venue, p) : p);
@@ -498,6 +565,19 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
 
   const tooCloseSet = tooCloseTables(tables);
 
+  // Sides of each welded table that touch a group neighbour (no chairs drawn there).
+  const groupMembers = new Map<string, TableModel[]>();
+  for (const tb of tables) {
+    if (!tb.groupId) continue;
+    const arr = groupMembers.get(tb.groupId);
+    if (arr) arr.push(tb);
+    else groupMembers.set(tb.groupId, [tb]);
+  }
+  const weldedSidesByTable: Record<string, Side[]> = {};
+  for (const tb of tables) {
+    if (tb.groupId) weldedSidesByTable[tb.id] = weldedSidesFor(tb, groupMembers.get(tb.groupId)!);
+  }
+
   // Grid lines within the venue.
   const gridLines: number[][] = [];
   const step = venue.gridStep || 0.5;
@@ -566,26 +646,51 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
               dragBound={makeObjectDragBound(o)}
             />
           ))}
-          {tables.map((tbl) => (
-            <TableNode
-              key={tbl.id}
-              table={tbl}
-              selected={selectedIds.includes(tbl.id)}
-              soleSelected={selectedIds.length === 1 && selectedIds[0] === tbl.id}
-              tooClose={tooCloseSet.has(tbl.id)}
-              panLocked={spaceDown}
-              ppm={PPM}
-              palette={palette}
-              projectChairStyle={settings.chairStyle}
-              minSpacing={settings.minSeatSpacing}
-              onSelect={select}
-              onDragStartTable={handleDragStart}
-              onDragMove={handleDragMove}
-              onMove={handleDragEnd}
-              onTransform={handleTableTransform}
-              dragBound={makeDragBound(tbl)}
-            />
-          ))}
+          {tables.map((tbl) =>
+            tbl.shape === "snake" ? (
+              <SnakeNode
+                key={tbl.id}
+                table={tbl}
+                selected={selectedIds.includes(tbl.id)}
+                soleSelected={selectedIds.length === 1 && selectedIds[0] === tbl.id}
+                tooClose={tooCloseSet.has(tbl.id)}
+                panLocked={spaceDown}
+                ppm={PPM}
+                palette={palette}
+                projectChairStyle={settings.chairStyle}
+                minSpacing={settings.minSeatSpacing}
+                onSelect={select}
+                onDragStartTable={handleDragStart}
+                onDragMove={handleDragMove}
+                onMove={handleDragEnd}
+                onNodeDrag={moveSnakeNode}
+                onNodeCommit={commitSnakeNode}
+                onAddNode={addSnakeNode}
+                onRemoveNode={removeSnakeNode}
+                dragBound={makeDragBound(tbl)}
+              />
+            ) : (
+              <TableNode
+                key={tbl.id}
+                table={tbl}
+                selected={selectedIds.includes(tbl.id)}
+                soleSelected={selectedIds.length === 1 && selectedIds[0] === tbl.id}
+                tooClose={tooCloseSet.has(tbl.id)}
+                panLocked={spaceDown}
+                ppm={PPM}
+                palette={palette}
+                projectChairStyle={settings.chairStyle}
+                minSpacing={settings.minSeatSpacing}
+                weldedSides={weldedSidesByTable[tbl.id] ?? NO_SIDES}
+                onSelect={select}
+                onDragStartTable={handleDragStart}
+                onDragMove={handleDragMove}
+                onMove={handleDragEnd}
+                onTransform={handleTableTransform}
+                dragBound={makeDragBound(tbl)}
+              />
+            ),
+          )}
           {marquee && (
             <Rect
               x={Math.min(marquee.x0, marquee.x1) * PPM}

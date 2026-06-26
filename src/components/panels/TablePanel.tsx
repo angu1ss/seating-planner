@@ -2,7 +2,13 @@ import { useStore, activeSheet } from "../../store";
 import { useT } from "../../i18n";
 import { Icon } from "../Icon";
 import type { ChairStyle, Side, TableModel, TableShape } from "../../types";
-import { isTight, maxComfortableSeats, seatSpacing } from "../../geometry";
+import { isTight, maxComfortableSeats, seatSpacing, snakeLength, weldedSidesFor } from "../../geometry";
+import { defaultSnakePath } from "../../constants";
+
+const SNAKE_SIDES: { key: Side; labelKey: string }[] = [
+  { key: "right", labelKey: "snake.sideA" },
+  { key: "left", labelKey: "snake.sideB" },
+];
 
 const SIDES: { key: Side; labelKey: string }[] = [
   { key: "top", labelKey: "side.top" },
@@ -29,6 +35,11 @@ export function TablePanel() {
   const duplicateTable = useStore((s) => s.duplicateTable);
   const duplicateSelected = useStore((s) => s.duplicateSelected);
   const deleteSelected = useStore((s) => s.deleteSelected);
+  const weldSelected = useStore((s) => s.weldSelected);
+  const unweldSelected = useStore((s) => s.unweldSelected);
+  const addSnakeNodeEnd = useStore((s) => s.addSnakeNodeEnd);
+  const removeSnakeNodeEnd = useStore((s) => s.removeSnakeNodeEnd);
+  const setSnakeNodeCount = useStore((s) => s.setSnakeNodeCount);
 
   const selected = tables.filter((tb) => selectedIds.includes(tb.id));
 
@@ -40,9 +51,27 @@ export function TablePanel() {
 
   const table = selected[0];
   const locked = table.locked;
-  const tight = isTight(table, minSpacing);
-  const spacing = seatSpacing(table);
-  const maxSeats = maxComfortableSeats(table, minSpacing);
+  const isSnake = table.shape === "snake";
+  // Sides joined to a welded neighbour: shown unchecked & locked (seats hidden there).
+  const welded =
+    table.shape === "rect" && table.groupId
+      ? weldedSidesFor(table, tables.filter((tb) => tb.groupId === table.groupId))
+      : [];
+
+  let tight: boolean;
+  let spacing: number;
+  let maxSeats: number;
+  if (isSnake) {
+    const length = snakeLength(table.path ?? []);
+    const sidesOn = (table.disabledSides.includes("right") ? 0 : 1) + (table.disabledSides.includes("left") ? 0 : 1);
+    spacing = sidesOn > 0 && table.seatCount > 0 ? (length * sidesOn) / table.seatCount : Infinity;
+    maxSeats = minSpacing > 0 && sidesOn > 0 ? Math.floor((length * sidesOn) / minSpacing) : table.seatCount;
+    tight = table.seatCount > 0 && spacing < minSpacing - 1e-9;
+  } else {
+    tight = isTight(table, minSpacing, welded);
+    spacing = seatSpacing(table, welded);
+    maxSeats = maxComfortableSeats(table, minSpacing, welded);
+  }
   const m = t("unit.m");
 
   const toggleSide = (side: Side, on: boolean) => {
@@ -78,26 +107,22 @@ export function TablePanel() {
           <select
             value={table.shape}
             disabled={locked}
-            onChange={(e) => updateTable(table.id, { shape: e.target.value as TableShape })}
+            onChange={(e) => {
+              const shape = e.target.value as TableShape;
+              updateTable(
+                table.id,
+                shape === "snake" && !table.path ? { shape, path: defaultSnakePath() } : { shape },
+              );
+            }}
           >
             <option value="rect">{t("shape.rect")}</option>
             <option value="ellipse">{t("shape.round")}</option>
+            <option value="snake">{t("shape.snake")}</option>
           </select>
         </label>
-        <div className="field-2col">
+        {isSnake ? (
           <label className="field">
-            <span>{table.shape === "ellipse" ? t("table.axisX") : t("left.width")}</span>
-            <input
-              type="number"
-              min={0.3}
-              step={0.1}
-              disabled={locked}
-              value={table.w}
-              onChange={(e) => updateTable(table.id, { w: Math.max(0.3, Number(e.target.value)) })}
-            />
-          </label>
-          <label className="field">
-            <span>{table.shape === "ellipse" ? t("table.axisY") : t("left.length")}</span>
+            <span>{t("snake.band")}</span>
             <input
               type="number"
               min={0.3}
@@ -107,17 +132,44 @@ export function TablePanel() {
               onChange={(e) => updateTable(table.id, { h: Math.max(0.3, Number(e.target.value)) })}
             />
           </label>
-        </div>
-        <label className="field">
-          <span>{t("table.rotation")}</span>
-          <input
-            type="number"
-            step={5}
-            disabled={locked}
-            value={table.rotation}
-            onChange={(e) => updateTable(table.id, { rotation: Number(e.target.value) % 360 })}
-          />
-        </label>
+        ) : (
+          <div className="field-2col">
+            <label className="field">
+              <span>{table.shape === "ellipse" ? t("table.axisX") : t("left.width")}</span>
+              <input
+                type="number"
+                min={0.3}
+                step={0.1}
+                disabled={locked}
+                value={table.w}
+                onChange={(e) => updateTable(table.id, { w: Math.max(0.3, Number(e.target.value)) })}
+              />
+            </label>
+            <label className="field">
+              <span>{table.shape === "ellipse" ? t("table.axisY") : t("left.length")}</span>
+              <input
+                type="number"
+                min={0.3}
+                step={0.1}
+                disabled={locked}
+                value={table.h}
+                onChange={(e) => updateTable(table.id, { h: Math.max(0.3, Number(e.target.value)) })}
+              />
+            </label>
+          </div>
+        )}
+        {!isSnake && (
+          <label className="field">
+            <span>{t("table.rotation")}</span>
+            <input
+              type="number"
+              step={5}
+              disabled={locked}
+              value={table.rotation}
+              onChange={(e) => updateTable(table.id, { rotation: Number(e.target.value) % 360 })}
+            />
+          </label>
+        )}
       </section>
 
       <section className="panel-section">
@@ -128,8 +180,8 @@ export function TablePanel() {
           <button disabled={locked} onClick={() => updateTable(table.id, { seatCount: table.seatCount + 1 })}>+</button>
         </div>
         <p className={tight ? "warn" : "muted"}>
-          {t("table.seatStep")}: {spacing.toFixed(2)} {m} · {t("table.comfortUpTo")} {maxSeats}{" "}
-          {t("table.seatsShort")}
+          {t("table.seatStep")}: {Number.isFinite(spacing) ? spacing.toFixed(2) : "—"} {m} ·{" "}
+          {t("table.comfortUpTo")} {maxSeats} {t("table.seatsShort")}
           {tight ? ` · ${t("table.tight")}` : ""}
         </p>
         <label className="field">
@@ -153,7 +205,29 @@ export function TablePanel() {
           <div className="sides">
             <span className="field-caption">{t("table.activeSides")}</span>
             <div className="sides-grid">
-              {SIDES.map((s) => (
+              {SIDES.map((s) => {
+                const weldedSide = welded.includes(s.key);
+                return (
+                  <label key={s.key} className="field-inline">
+                    <input
+                      type="checkbox"
+                      disabled={locked || weldedSide}
+                      checked={!table.disabledSides.includes(s.key) && !weldedSide}
+                      onChange={(e) => toggleSide(s.key, e.target.checked)}
+                    />
+                    <span>{t(s.labelKey)}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {isSnake && (
+          <div className="sides">
+            <span className="field-caption">{t("table.activeSides")}</span>
+            <div className="sides-grid">
+              {SNAKE_SIDES.map((s) => (
                 <label key={s.key} className="field-inline">
                   <input
                     type="checkbox"
@@ -167,6 +241,36 @@ export function TablePanel() {
             </div>
           </div>
         )}
+
+        {isSnake && (
+          <label className="field">
+            <span>{t("snake.nodes")}</span>
+            <div className="stepper">
+              <button
+                disabled={locked || (table.path?.length ?? 0) >= 20}
+                onClick={() => addSnakeNodeEnd(table.id)}
+              >
+                +
+              </button>
+              <input
+                className="stepper-input"
+                type="number"
+                min={3}
+                max={20}
+                disabled={locked}
+                value={table.path?.length ?? 0}
+                onChange={(e) => setSnakeNodeCount(table.id, Number(e.target.value))}
+              />
+              <button
+                disabled={locked || (table.path?.length ?? 0) <= 3}
+                onClick={() => removeSnakeNodeEnd(table.id)}
+              >
+                −
+              </button>
+            </div>
+          </label>
+        )}
+        {isSnake && <p className="muted">{t("snake.editHint")}</p>}
       </section>
 
       <section className="panel-section">
@@ -181,15 +285,22 @@ export function TablePanel() {
         </label>
       </section>
 
-      <section className="panel-section row-actions">
-        <button className="btn" onClick={() => duplicateTable(table.id)}><Icon name="duplicate" /> {t("common.duplicate")}</button>
-        <button className="btn danger" disabled={locked} onClick={() => removeTable(table.id)}><Icon name="delete" /> {t("common.delete")}</button>
+      <section className="panel-section actions-col">
+        <button className="btn block" onClick={() => duplicateTable(table.id)}><Icon name="duplicate" /> {t("common.duplicate")}</button>
+        <div className="row-actions">
+          {table.groupId && (
+            <button className="btn" onClick={() => unweldSelected()}><Icon name="unweld" /> {t("table.unweld")}</button>
+          )}
+          <button className="btn danger" disabled={locked} onClick={() => removeTable(table.id)}><Icon name="delete" /> {t("common.delete")}</button>
+        </div>
       </section>
     </div>
   );
 
   function MultiEditor({ tables: sel }: { tables: TableModel[] }) {
     const ids = sel.map((tb) => tb.id);
+    const rectCount = sel.filter((tb) => tb.shape === "rect").length;
+    const anyGrouped = sel.some((tb) => tb.groupId);
     const cShape = common(sel.map((tb) => tb.shape));
     const cW = common(sel.map((tb) => tb.w));
     const cH = common(sel.map((tb) => tb.h));
@@ -317,15 +428,32 @@ export function TablePanel() {
           </label>
         </section>
 
-        <section className="panel-section row-actions">
-          <button className="btn" onClick={() => duplicateSelected()}><Icon name="duplicate" /> {t("common.duplicate")}</button>
-          <button className="btn icon-only" title={t("table.lock")} onClick={() => updateTables(ids, { locked: true })}>
-            <Icon name="lock" />
-          </button>
-          <button className="btn icon-only" title={t("table.unlock")} onClick={() => updateTables(ids, { locked: false })}>
-            <Icon name="unlock" />
-          </button>
-          <button className="btn danger" onClick={() => deleteSelected()}><Icon name="delete" /> {t("common.delete")}</button>
+        {(rectCount >= 2 || anyGrouped) && (
+          <section className="panel-section row-actions">
+            {rectCount >= 2 && (
+              <button className="btn" onClick={() => weldSelected()} title={t("table.weldHint")}>
+                <Icon name="weld" /> {t("table.weld")}
+              </button>
+            )}
+            {anyGrouped && (
+              <button className="btn" onClick={() => unweldSelected()}>
+                <Icon name="unweld" /> {t("table.unweld")}
+              </button>
+            )}
+          </section>
+        )}
+
+        <section className="panel-section actions-col">
+          <button className="btn block" onClick={() => duplicateSelected()}><Icon name="duplicate" /> {t("common.duplicate")}</button>
+          <div className="row-actions">
+            <button className="btn icon-only" title={t("table.lock")} onClick={() => updateTables(ids, { locked: true })}>
+              <Icon name="lock" />
+            </button>
+            <button className="btn icon-only" title={t("table.unlock")} onClick={() => updateTables(ids, { locked: false })}>
+              <Icon name="unlock" />
+            </button>
+            <button className="btn danger" onClick={() => deleteSelected()}><Icon name="delete" /> {t("common.delete")}</button>
+          </div>
         </section>
       </div>
     );

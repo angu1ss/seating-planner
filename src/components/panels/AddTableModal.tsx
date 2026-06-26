@@ -87,6 +87,7 @@ export function AddTableModal({ onClose }: Props) {
           <select value={shape} onChange={(e) => setShape(e.target.value as TableShape)}>
             <option value="rect">{t("shape.rect")}</option>
             <option value="ellipse">{t("shape.round")}</option>
+            <option value="snake">{t("shape.snake")}</option>
           </select>
         </label>
         <div className="field-2col">

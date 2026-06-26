@@ -1,4 +1,4 @@
-import type { ProjectState, SceneObjectType, Sheet, TableShape } from "./types";
+import type { PathPoint, ProjectState, SceneObjectType, Sheet, TableShape } from "./types";
 
 export const SCHEMA_VERSION = 1;
 
@@ -24,7 +24,18 @@ export const TABLE_PRESETS: TablePreset[] = [
   { id: "rect-180x80", shape: "rect", w: 1.8, h: 0.8, seatCount: 6 },
   { id: "rect-240x90", shape: "rect", w: 2.4, h: 0.9, seatCount: 8 },
   { id: "emperor-600x120", shape: "rect", w: 6.0, h: 1.2, seatCount: 18, nameKey: "shape.emperor" },
+  { id: "snake", shape: "snake", w: 4.8, h: 0.9, seatCount: 14, nameKey: "shape.snake" },
 ];
+
+/** Default centreline (gentle S-curve) for a freshly added snake table — bbox-centred, meters. */
+export function defaultSnakePath(): PathPoint[] {
+  return [
+    { x: -2.4, y: -0.15 },
+    { x: -0.8, y: 0.15 },
+    { x: 0.8, y: -0.15 },
+    { x: 2.4, y: 0.15 },
+  ];
+}
 
 export interface VenuePreset {
   id: string;
@@ -43,6 +54,7 @@ const cm = (m: number) => Math.round(m * 100);
 
 /** Localized, human-readable label for a table preset. */
 export function presetLabel(p: TablePreset, t: (k: string) => string): string {
+  if (p.shape === "snake") return t(p.nameKey ?? "shape.snake");
   if (p.nameKey) return `${t(p.nameKey)} ${cm(p.w)}×${cm(p.h)}`;
   if (p.shape === "ellipse") {
     return p.w === p.h ? `${t("shape.round")} Ø${cm(p.w)}` : `${t("shape.ellipse")} ${cm(p.w)}×${cm(p.h)}`;

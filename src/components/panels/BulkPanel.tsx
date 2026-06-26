@@ -10,10 +10,13 @@ export function BulkPanel() {
   const updateObjects = useStore((s) => s.updateObjects);
   const duplicateSelected = useStore((s) => s.duplicateSelected);
   const deleteSelected = useStore((s) => s.deleteSelected);
+  const unweldSelected = useStore((s) => s.unweldSelected);
 
   const tableSet = new Set(tables.map((tb) => tb.id));
   const tIds = selectedIds.filter((id) => tableSet.has(id));
   const oIds = selectedIds.filter((id) => !tableSet.has(id));
+
+  const anyGrouped = tables.some((tb) => selectedIds.includes(tb.id) && tb.groupId);
 
   const setLocked = (locked: boolean) => {
     if (tIds.length) updateTables(tIds, { locked });
@@ -26,19 +29,28 @@ export function BulkPanel() {
         <h3>{`${t("table.selected")}: ${selectedIds.length}`}</h3>
         <p className="muted">{t("table.bulkHint")}</p>
       </section>
-      <section className="panel-section row-actions">
-        <button className="btn" onClick={() => duplicateSelected()}>
+      {anyGrouped && (
+        <section className="panel-section row-actions">
+          <button className="btn" onClick={() => unweldSelected()}>
+            <Icon name="unweld" /> {t("table.unweld")}
+          </button>
+        </section>
+      )}
+      <section className="panel-section actions-col">
+        <button className="btn block" onClick={() => duplicateSelected()}>
           <Icon name="duplicate" /> {t("common.duplicate")}
         </button>
-        <button className="btn icon-only" title={t("obj.lock")} onClick={() => setLocked(true)}>
-          <Icon name="lock" />
-        </button>
-        <button className="btn icon-only" title={t("obj.unlock")} onClick={() => setLocked(false)}>
-          <Icon name="unlock" />
-        </button>
-        <button className="btn danger" onClick={() => deleteSelected()}>
-          <Icon name="delete" /> {t("common.delete")}
-        </button>
+        <div className="row-actions">
+          <button className="btn icon-only" title={t("obj.lock")} onClick={() => setLocked(true)}>
+            <Icon name="lock" />
+          </button>
+          <button className="btn icon-only" title={t("obj.unlock")} onClick={() => setLocked(false)}>
+            <Icon name="unlock" />
+          </button>
+          <button className="btn danger" onClick={() => deleteSelected()}>
+            <Icon name="delete" /> {t("common.delete")}
+          </button>
+        </div>
       </section>
     </div>
   );
