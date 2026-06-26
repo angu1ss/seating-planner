@@ -11,6 +11,8 @@ dist
 dist-ssr
 *.local
 
+package-lock.json
+
 # Secrets (Font Awesome Pro token, etc.)
 .env
 .env.*
