@@ -34,7 +34,17 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
             <tbody>
               {ROWS.map((r) => (
                 <tr key={r.k}>
-                  <td className="keys">{r.keys}</td>
+                  <td className="keys">
+                    {r.keys.split(" ").map((tok, i) =>
+                      tok === "+" || tok === "/" ? (
+                        <span key={i} className="kbd-sep">
+                          {tok}
+                        </span>
+                      ) : (
+                        <kbd key={i}>{tok}</kbd>
+                      ),
+                    )}
+                  </td>
                   <td>{t(r.k)}</td>
                 </tr>
               ))}

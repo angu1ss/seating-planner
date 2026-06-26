@@ -1,4 +1,14 @@
-import type { PathPoint, ProjectState, SceneObjectType, Sheet, TableShape } from "./types";
+import type {
+  AgeCategory,
+  Sex,
+  GuestFeature,
+  GuestRole,
+  PathPoint,
+  ProjectState,
+  SceneObjectType,
+  Sheet,
+  TableShape,
+} from "./types";
 
 export const SCHEMA_VERSION = 1;
 
@@ -101,6 +111,30 @@ export function createSheet(name: string): Sheet {
   };
 }
 
+/** Guest roles available for a wedding (the only event type for now). */
+export const GUEST_ROLES: GuestRole[] = ["guest", "groom", "bride", "witness", "parent"];
+/** Roles that mark the newlyweds — used by the auto-seating rules. */
+export const NEWLYWED_ROLES: GuestRole[] = ["groom", "bride"];
+export const GUEST_FEATURES: GuestFeature[] = ["pregnant", "wheelchair", "hardOfHearing"];
+export const AGE_CATEGORIES: AgeCategory[] = ["adult", "child", "elderly"];
+export const SEXES: Sex[] = ["male", "female"];
+
+export const guestRoleLabelKey = (r: GuestRole): string => `role.${r}`;
+export const guestFeatureLabelKey = (f: GuestFeature): string => `feature.${f}`;
+export const ageLabelKey = (a: AgeCategory): string => `age.${a}`;
+export const sexLabelKey = (s: Sex): string => `sex.${s}`;
+
+/** Chair tint by sex; null → neutral. */
+export const SEX_COLOR: Record<Sex, string> = { male: "#6aa8e0", female: "#e79fc0" };
+export const NEUTRAL_SEAT = "#9aa6b4";
+
+/** Initials — first letters of up to four name words (split on spaces and hyphens). */
+export function initials(name: string): string {
+  const parts = name.trim().split(/[\s-]+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return parts.slice(0, 4).map((p) => p[0]!.toUpperCase()).join("");
+}
+
 export function createInitialState(): ProjectState {
   const sheet = createSheet("");
   return {
@@ -109,5 +143,6 @@ export function createInitialState(): ProjectState {
     settings: { minSeatSpacing: 0.65, chairStyle: "round" },
     sheets: [sheet],
     activeSheetId: sheet.id,
+    guests: [],
   };
 }

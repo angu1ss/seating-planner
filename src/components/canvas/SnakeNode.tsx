@@ -1,11 +1,11 @@
-import { Group, Rect, Circle, Line, Text, Path } from "react-konva";
+import { Group, Circle, Line, Text, Path } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, TableModel } from "../../types";
-import { CHAIR_RADIUS } from "../../constants";
 import { computeSnakeChairs, snakeCenterline, snakeLength } from "../../geometry";
 import type { Palette } from "../../theme";
 import { useT } from "../../i18n";
 import { LOCK_BODY, LOCK_SHACKLE_CLOSED } from "../icons";
+import { Chair, type Occupant } from "./Chair";
 
 const LOCK_ICON = 14;
 
@@ -19,6 +19,9 @@ interface Props {
   palette: Palette;
   projectChairStyle: ChairStyle;
   minSpacing: number;
+  occupants: Record<number, Occupant>;
+  highlightIndex: number | null;
+  onSeatClick: (tableId: string, index: number) => void;
   onSelect: (id: string, additive: boolean) => void;
   onDragStartTable: (id: string) => void;
   onDragMove: (id: string, x: number, y: number) => void;
@@ -40,6 +43,9 @@ export function SnakeNode({
   palette,
   projectChairStyle,
   minSpacing,
+  occupants,
+  highlightIndex,
+  onSeatClick,
   onSelect,
   onDragStartTable,
   onDragMove,
@@ -58,7 +64,6 @@ export function SnakeNode({
   const linePoints = dense.flatMap((p) => [p.x * ppm, p.y * ppm]);
   const chairs = computeSnakeChairs(table);
   const chairStyle: ChairStyle = table.chairStyle ?? projectChairStyle;
-  const chairR = CHAIR_RADIUS * ppm;
 
   // Comfort: spacing = total length × enabled sides ÷ seats.
   const sidesOn = (table.disabledSides.includes("right") ? 0 : 1) + (table.disabledSides.includes("left") ? 0 : 1);
@@ -109,36 +114,18 @@ export function SnakeNode({
       onDragEnd={(e) => onMove(table.id, e.target.x() / ppm, e.target.y() / ppm)}
     >
       {/* Chairs (behind the band) */}
-      {chairs.map((c, i) =>
-        chairStyle === "round" ? (
-          <Circle
-            key={i}
-            x={c.x * ppm}
-            y={c.y * ppm}
-            radius={chairR}
-            fill={palette.chairFill}
-            stroke={palette.chairStroke}
-            strokeWidth={1}
-            listening={false}
-          />
-        ) : (
-          <Rect
-            key={i}
-            x={c.x * ppm}
-            y={c.y * ppm}
-            width={chairR * 2}
-            height={chairR * 2}
-            offsetX={chairR}
-            offsetY={chairR}
-            rotation={c.rotation}
-            cornerRadius={chairR * 0.35}
-            fill={palette.chairFill}
-            stroke={palette.chairStroke}
-            strokeWidth={1}
-            listening={false}
-          />
-        ),
-      )}
+      {chairs.map((c, i) => (
+        <Chair
+          key={i}
+          c={c}
+          ppm={ppm}
+          chairStyle={chairStyle}
+          palette={palette}
+          occupant={occupants[i] ?? null}
+          highlighted={i === highlightIndex}
+          onClick={() => onSeatClick(table.id, i)}
+        />
+      ))}
 
       {/* Podium halo ring (behind the band) */}
       {table.isPodium && (

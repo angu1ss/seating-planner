@@ -4,6 +4,8 @@ import { Icon } from "../Icon";
 import type { ChairStyle, Side, TableModel, TableShape } from "../../types";
 import { isTight, maxComfortableSeats, seatSpacing, snakeLength, weldedSidesFor } from "../../geometry";
 import { defaultSnakePath } from "../../constants";
+import { CHAIR_ICONS, SHAPE_ICONS } from "../../iconmap";
+import { IconSelect } from "./IconSelect";
 
 const SNAKE_SIDES: { key: Side; labelKey: string }[] = [
   { key: "right", labelKey: "snake.sideA" },
@@ -102,24 +104,26 @@ export function TablePanel() {
             onChange={(e) => updateTable(table.id, { name: e.target.value })}
           />
         </label>
-        <label className="field">
+        <div className="field">
           <span>{t("table.shape")}</span>
-          <select
-            value={table.shape}
+          <IconSelect
+            ariaLabel={t("table.shape")}
             disabled={locked}
-            onChange={(e) => {
-              const shape = e.target.value as TableShape;
+            value={table.shape}
+            onChange={(v) => {
+              const shape = v as TableShape;
               updateTable(
                 table.id,
                 shape === "snake" && !table.path ? { shape, path: defaultSnakePath() } : { shape },
               );
             }}
-          >
-            <option value="rect">{t("shape.rect")}</option>
-            <option value="ellipse">{t("shape.round")}</option>
-            <option value="snake">{t("shape.snake")}</option>
-          </select>
-        </label>
+            options={[
+              { value: "rect", label: t("shape.rect"), icon: SHAPE_ICONS.rect },
+              { value: "ellipse", label: t("shape.round"), icon: SHAPE_ICONS.ellipse },
+              { value: "snake", label: t("shape.snake"), icon: SHAPE_ICONS.snake },
+            ]}
+          />
+        </div>
         {isSnake ? (
           <label className="field">
             <span>{t("snake.band")}</span>
@@ -184,22 +188,22 @@ export function TablePanel() {
           {t("table.comfortUpTo")} {maxSeats} {t("table.seatsShort")}
           {tight ? ` · ${t("table.tight")}` : ""}
         </p>
-        <label className="field">
+        <div className="field">
           <span>{t("table.chair")}</span>
-          <select
-            value={table.chairStyle ?? "inherit"}
+          <IconSelect
+            ariaLabel={t("table.chair")}
             disabled={locked}
-            onChange={(e) =>
-              updateTable(table.id, {
-                chairStyle: e.target.value === "inherit" ? null : (e.target.value as ChairStyle),
-              })
+            value={table.chairStyle ?? "inherit"}
+            onChange={(v) =>
+              updateTable(table.id, { chairStyle: v === "inherit" ? null : (v as ChairStyle) })
             }
-          >
-            <option value="inherit">{t("chair.inherit")}</option>
-            <option value="round">{t("chair.round")}</option>
-            <option value="square">{t("chair.square")}</option>
-          </select>
-        </label>
+            options={[
+              { value: "inherit", label: t("chair.inherit") },
+              { value: "round", label: t("chair.round"), icon: CHAIR_ICONS.round },
+              { value: "square", label: t("chair.square"), icon: CHAIR_ICONS.square },
+            ]}
+          />
+        </div>
 
         {table.shape === "rect" && (
           <div className="sides">
@@ -322,18 +326,20 @@ export function TablePanel() {
         <section className="panel-section">
           <h3>{`${t("table.selected")}: ${sel.length}`}</h3>
           <p className="muted">{t("table.bulkHint")}</p>
-          <label className="field">
+          <div className="field">
             <span>{t("table.shape")}</span>
-            <select
-              value={cShape === MIXED ? "" : cShape}
+            <IconSelect
+              ariaLabel={t("table.shape")}
               disabled={cShape === MIXED}
-              onChange={(e) => updateTables(ids, { shape: e.target.value as TableShape })}
-            >
-              {cShape === MIXED && <option value="">{mix}</option>}
-              <option value="rect">{t("shape.rect")}</option>
-              <option value="ellipse">{t("shape.round")}</option>
-            </select>
-          </label>
+              value={cShape === MIXED ? "" : cShape}
+              onChange={(v) => v && updateTables(ids, { shape: v as TableShape })}
+              options={[
+                ...(cShape === MIXED ? [{ value: "", label: mix }] : []),
+                { value: "rect", label: t("shape.rect"), icon: SHAPE_ICONS.rect },
+                { value: "ellipse", label: t("shape.round"), icon: SHAPE_ICONS.ellipse },
+              ]}
+            />
+          </div>
           <div className="field-2col">
             <label className="field">
               <span>{isEllipse ? t("table.axisX") : t("left.width")}</span>
@@ -397,23 +403,24 @@ export function TablePanel() {
               {isTight(hintTable, minSpacing) ? ` · ${t("table.tight")}` : ""}
             </p>
           )}
-          <label className="field">
+          <div className="field">
             <span>{t("table.chair")}</span>
-            <select
+            <IconSelect
+              ariaLabel={t("table.chair")}
               disabled={cChair === MIXED}
               value={cChair === MIXED ? "" : cChair === null ? "inherit" : cChair}
-              onChange={(e) =>
-                updateTables(ids, {
-                  chairStyle: e.target.value === "inherit" ? null : (e.target.value as ChairStyle),
-                })
-              }
-            >
-              {cChair === MIXED && <option value="">{mix}</option>}
-              <option value="inherit">{t("chair.inherit")}</option>
-              <option value="round">{t("chair.round")}</option>
-              <option value="square">{t("chair.square")}</option>
-            </select>
-          </label>
+              onChange={(v) => {
+                if (cChair === MIXED && v === "") return;
+                updateTables(ids, { chairStyle: v === "inherit" ? null : (v as ChairStyle) });
+              }}
+              options={[
+                ...(cChair === MIXED ? [{ value: "", label: mix }] : []),
+                { value: "inherit", label: t("chair.inherit") },
+                { value: "round", label: t("chair.round"), icon: CHAIR_ICONS.round },
+                { value: "square", label: t("chair.square"), icon: CHAIR_ICONS.square },
+              ]}
+            />
+          </div>
         </section>
 
         <section className="panel-section">

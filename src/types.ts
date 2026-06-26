@@ -96,10 +96,32 @@ export interface Settings {
   chairStyle: ChairStyle;
 }
 
+/** Event type drives the available guest roles. Only "wedding" exists for now. */
+export type EventType = "wedding";
+
+export type Sex = "male" | "female";
+export type GuestRole = "groom" | "bride" | "witness" | "parent" | "guest";
+export type AgeCategory = "adult" | "child" | "elderly";
+export type GuestFeature = "pregnant" | "wheelchair" | "hardOfHearing";
+
+export interface Guest {
+  id: string;
+  name: string;
+  role: GuestRole;
+  ageCategory: AgeCategory;
+  /** Biological sex; tints the chair (blue / pink). null = not chosen yet (neutral). */
+  sex: Sex | null;
+  features: GuestFeature[];
+  /** Free-text note shown only while editing / on hover — e.g. "bride's coworker". */
+  relation: string;
+  /** Assigned chair (by table + perimeter index, any hall), or null if unseated. */
+  seat: { tableId: string; index: number } | null;
+}
+
 export interface ProjectMeta {
   id: string;
   name: string;
-  eventType: string;
+  eventType: EventType;
   date: string;
   note: string;
 }
@@ -119,4 +141,5 @@ export interface ProjectState {
   settings: Settings;
   sheets: Sheet[];
   activeSheetId: string;
+  guests: Guest[];
 }

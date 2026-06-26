@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { useStore, activeSheet } from "../../store";
+import type { EventType } from "../../types";
 import { useT } from "../../i18n";
 import { useEscClose } from "../../utils/useEscClose";
+import { CHAIR_ICONS } from "../../iconmap";
 import { Icon } from "../Icon";
+import { IconSelect } from "./IconSelect";
 import { ConfirmModal } from "./ConfirmModal";
 
 interface Props {
@@ -42,16 +45,30 @@ export function ProjectSettingsModal({ onClose }: Props) {
                 onChange={(e) => setProjectMeta({ name: e.target.value })}
               />
             </label>
+            <div className="field">
+              <span>{t("event.type")}</span>
+              <IconSelect
+                ariaLabel={t("event.type")}
+                value={project.eventType}
+                onChange={(v) => setProjectMeta({ eventType: v as EventType })}
+                options={[{ value: "wedding", label: t("event.wedding") }]}
+              />
+            </div>
 
-            <label className="field">
+            <div className="field">
               <span>{t("left.gridStep")}</span>
-              <select value={venue.gridStep} onChange={(e) => setVenue({ gridStep: Number(e.target.value) })}>
-                <option value={0.1}>0.1</option>
-                <option value={0.25}>0.25</option>
-                <option value={0.5}>0.5</option>
-                <option value={1}>1.0</option>
-              </select>
-            </label>
+              <IconSelect
+                ariaLabel={t("left.gridStep")}
+                value={String(venue.gridStep)}
+                onChange={(v) => setVenue({ gridStep: Number(v) })}
+                options={[
+                  { value: "0.1", label: "0.1" },
+                  { value: "0.25", label: "0.25" },
+                  { value: "0.5", label: "0.5" },
+                  { value: "1", label: "1.0" },
+                ]}
+              />
+            </div>
             <label className="field-inline">
               <input
                 type="checkbox"
@@ -60,16 +77,18 @@ export function ProjectSettingsModal({ onClose }: Props) {
               />
               <span>{t("left.snapToGrid")}</span>
             </label>
-            <label className="field">
+            <div className="field">
               <span>{t("left.defaultChair")}</span>
-              <select
+              <IconSelect
+                ariaLabel={t("left.defaultChair")}
                 value={settings.chairStyle}
-                onChange={(e) => setSettings({ chairStyle: e.target.value as "round" | "square" })}
-              >
-                <option value="round">{t("chair.round")}</option>
-                <option value="square">{t("chair.square")}</option>
-              </select>
-            </label>
+                onChange={(v) => setSettings({ chairStyle: v as "round" | "square" })}
+                options={[
+                  { value: "round", label: t("chair.round"), icon: CHAIR_ICONS.round },
+                  { value: "square", label: t("chair.square"), icon: CHAIR_ICONS.square },
+                ]}
+              />
+            </div>
             <label className="field">
               <span>{t("left.minSpacing")}</span>
               <input

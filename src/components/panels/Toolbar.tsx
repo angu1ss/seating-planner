@@ -8,10 +8,12 @@ import { AppActions } from "./AppActions";
 
 interface Props {
   onToggleLeft: () => void;
+  onToggleGuests: () => void;
   onSettings: () => void;
+  showLeftToggle?: boolean;
 }
 
-export function Toolbar({ onToggleLeft, onSettings }: Props) {
+export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, showLeftToggle }: Props) {
   const t = useT();
   const project = useStore((s) => s.project);
   const setProjectMeta = useStore((s) => s.setProjectMeta);
@@ -22,7 +24,9 @@ export function Toolbar({ onToggleLeft, onSettings }: Props) {
   return (
     <header className="toolbar">
       <div className="toolbar-group">
-        <button className="icon-btn only-mobile" onClick={onToggleLeft} aria-label="menu">☰</button>
+        <button className={`icon-btn ${showLeftToggle ? "" : "only-mobile"}`} onClick={onToggleLeft} aria-label="menu">
+          ☰
+        </button>
         <span className="app-title">{t("app.name")}</span>
         <div className="project-name-display only-desktop">
           {editing ? (
@@ -47,6 +51,14 @@ export function Toolbar({ onToggleLeft, onSettings }: Props) {
       </div>
 
       <div className="toolbar-group">
+        <button
+          className="icon-btn only-mobile"
+          onClick={onToggleGuests}
+          title={t("guests.title")}
+          aria-label={t("guests.title")}
+        >
+          <Icon name="guests" />
+        </button>
         {wide ? (
           <>
             <AppActions layout="bar" />

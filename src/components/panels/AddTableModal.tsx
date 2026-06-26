@@ -4,8 +4,10 @@ import { useT } from "../../i18n";
 import { useEscClose } from "../../utils/useEscClose";
 import { useDraggablePanel } from "../../utils/useDraggablePanel";
 import { TABLE_PRESETS, presetLabel } from "../../constants";
+import { CHAIR_ICONS, SHAPE_ICONS } from "../../iconmap";
 import type { ChairStyle, TableShape } from "../../types";
 import { Icon } from "../Icon";
+import { IconSelect } from "./IconSelect";
 
 interface Props {
   onClose: () => void;
@@ -82,14 +84,19 @@ export function AddTableModal({ onClose }: Props) {
           <span>{t("table.name")}</span>
           <input value={name} placeholder={t("table.word")} onChange={(e) => setName(e.target.value)} />
         </label>
-        <label className="field">
+        <div className="field">
           <span>{t("table.shape")}</span>
-          <select value={shape} onChange={(e) => setShape(e.target.value as TableShape)}>
-            <option value="rect">{t("shape.rect")}</option>
-            <option value="ellipse">{t("shape.round")}</option>
-            <option value="snake">{t("shape.snake")}</option>
-          </select>
-        </label>
+          <IconSelect
+            ariaLabel={t("table.shape")}
+            value={shape}
+            onChange={(v) => setShape(v as TableShape)}
+            options={[
+              { value: "rect", label: t("shape.rect"), icon: SHAPE_ICONS.rect },
+              { value: "ellipse", label: t("shape.round"), icon: SHAPE_ICONS.ellipse },
+              { value: "snake", label: t("shape.snake"), icon: SHAPE_ICONS.snake },
+            ]}
+          />
+        </div>
         <div className="field-2col">
           <label className="field">
             <span>{shape === "ellipse" ? t("table.axisX") : t("left.width")}</span>
@@ -105,14 +112,19 @@ export function AddTableModal({ onClose }: Props) {
             <span>{t("table.seats")}</span>
             <input type="number" min={0} value={seatCount} onChange={(e) => setSeatCount(Number(e.target.value))} />
           </label>
-          <label className="field">
+          <div className="field">
             <span>{t("table.chair")}</span>
-            <select value={chairStyle} onChange={(e) => setChairStyle(e.target.value as "inherit" | ChairStyle)}>
-              <option value="inherit">{t("chair.inherit")}</option>
-              <option value="round">{t("chair.round")}</option>
-              <option value="square">{t("chair.square")}</option>
-            </select>
-          </label>
+            <IconSelect
+              ariaLabel={t("table.chair")}
+              value={chairStyle}
+              onChange={(v) => setChairStyle(v as "inherit" | ChairStyle)}
+              options={[
+                { value: "inherit", label: t("chair.inherit") },
+                { value: "round", label: t("chair.round"), icon: CHAIR_ICONS.round },
+                { value: "square", label: t("chair.square"), icon: CHAIR_ICONS.square },
+              ]}
+            />
+          </div>
         </div>
         <label className="field">
           <span>{t("modal.quantity")}</span>

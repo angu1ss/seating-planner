@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { Stage, Layer, Rect, Line } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Side, TableModel } from "../../types";
@@ -7,6 +7,8 @@ import { getPalette } from "../../theme";
 import { useT, useI18n } from "../../i18n";
 import {
   clampTableCenter,
+  computeChairs,
+  computeSnakeChairs,
   findFreeSpot,
   findWeldSnap,
   tableOuterExtent,
@@ -14,13 +16,17 @@ import {
   tooCloseTables,
   weldedSidesFor,
 } from "../../geometry";
-import { objectLabelKey } from "../../constants";
+import { SEX_COLOR, NEUTRAL_SEAT, initials, objectLabelKey } from "../../constants";
+import { guestBadges } from "../../iconmap";
+import type { Guest } from "../../types";
 import { downloadJSON, slugify } from "../../utils/file";
 import { Icon } from "../Icon";
 import { TabBar } from "../panels/TabBar";
 import { TableNode } from "./TableNode";
 import { SnakeNode } from "./SnakeNode";
 import { ObjectNode } from "./ObjectNode";
+import { type Occupant } from "./Chair";
+import { SeatPickerModal } from "../panels/SeatPickerModal";
 
 /** Pixels per meter at zoom = 1. */
 const PPM = 50;
@@ -31,6 +37,18 @@ const ZOOM_FACTOR = 1.08;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 const NO_SIDES: Side[] = [];
+const GUEST_DRAG_TYPE = "application/x-guest-id";
+const SEAT_DROP_RADIUS = 0.55; // meters: how close a drop must be to a chair
+
+function occupantOf(g: Guest): Occupant {
+  return {
+    initials: initials(g.name),
+    bg: g.sex ? SEX_COLOR[g.sex] : NEUTRAL_SEAT,
+    badges: guestBadges(g),
+  };
+}
+
+const NO_OCCUPANTS: Record<number, Occupant> = {};
 
 interface KbActions {
   copySelected: () => void;
@@ -67,7 +85,7 @@ function isTypingTarget(el: EventTarget | null): boolean {
   );
 }
 
-export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
+export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend: () => void }) {
   const t = useT();
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
@@ -78,6 +96,7 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
   const [spaceDown, setSpaceDown] = useState(false);
   const [draggingStage, setDraggingStage] = useState(false);
   const [marquee, setMarquee] = useState<Marquee | null>(null);
+  const [pickSeat, setPickSeat] = useState<{ tableId: string; index: number } | null>(null);
   const didFit = useRef(false);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const groupDrag = useRef<{
@@ -106,6 +125,9 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
   const commitSnakeNode = useStore((s) => s.commitSnakeNode);
   const addSnakeNode = useStore((s) => s.addSnakeNode);
   const removeSnakeNode = useStore((s) => s.removeSnakeNode);
+  const guests = useStore((s) => s.guests);
+  const assignGuestToSeat = useStore((s) => s.assignGuestToSeat);
+  const highlightGuestId = useStore((s) => s.highlightGuestId);
   const copySelected = useStore((s) => s.copySelected);
   const pasteClipboard = useStore((s) => s.pasteClipboard);
   const duplicateSelected = useStore((s) => s.duplicateSelected);
@@ -578,6 +600,57 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
     if (tb.groupId) weldedSidesByTable[tb.id] = weldedSidesFor(tb, groupMembers.get(tb.groupId)!);
   }
 
+  // Which guest sits at each chair (by table id → seat index → occupant), for the active hall.
+  const occupantsByTable = new Map<string, Record<number, Occupant>>();
+  for (const g of guests) {
+    if (!g.seat) continue;
+    let rec = occupantsByTable.get(g.seat.tableId);
+    if (!rec) {
+      rec = {};
+      occupantsByTable.set(g.seat.tableId, rec);
+    }
+    rec[g.seat.index] = occupantOf(g);
+  }
+
+  const hlGuest = highlightGuestId ? guests.find((g) => g.id === highlightGuestId) : null;
+  const highlightSeat = hlGuest?.seat ?? null;
+
+  const findNearestSeat = (mx: number, my: number): { tableId: string; index: number } | null => {
+    let best: { tableId: string; index: number } | null = null;
+    let bestD = SEAT_DROP_RADIUS;
+    for (const tbl of tables) {
+      const local =
+        tbl.shape === "snake" ? computeSnakeChairs(tbl) : computeChairs(tbl, weldedSidesByTable[tbl.id] ?? NO_SIDES);
+      const rad = tbl.shape === "snake" ? 0 : (tbl.rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      for (let i = 0; i < local.length; i++) {
+        const wx = tbl.x + local[i].x * cos - local[i].y * sin;
+        const wy = tbl.y + local[i].x * sin + local[i].y * cos;
+        const d = Math.hypot(wx - mx, wy - my);
+        if (d < bestD) {
+          bestD = d;
+          best = { tableId: tbl.id, index: i };
+        }
+      }
+    }
+    return best;
+  };
+
+  const onCanvasDragOver = (e: ReactDragEvent) => {
+    if (e.dataTransfer.types.includes(GUEST_DRAG_TYPE)) e.preventDefault();
+  };
+  const onCanvasDrop = (e: ReactDragEvent) => {
+    const guestId = e.dataTransfer.getData(GUEST_DRAG_TYPE);
+    if (!guestId) return;
+    e.preventDefault();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const m = screenToMeters({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    const hit = findNearestSeat(m.x, m.y);
+    if (hit) assignGuestToSeat(guestId, hit.tableId, hit.index);
+  };
+
   // Grid lines within the venue.
   const gridLines: number[][] = [];
   const step = venue.gridStep || 0.5;
@@ -591,7 +664,13 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
   const cursor = spaceDown ? (draggingStage ? "grabbing" : "grab") : undefined;
 
   return (
-    <div ref={containerRef} className="canvas-wrap" style={{ background: palette.bg, cursor }}>
+    <div
+      ref={containerRef}
+      className="canvas-wrap"
+      style={{ background: palette.bg, cursor }}
+      onDragOver={onCanvasDragOver}
+      onDrop={onCanvasDrop}
+    >
       {size.w > 0 && size.h > 0 && (
       <Stage
         width={size.w}
@@ -659,6 +738,9 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
                 palette={palette}
                 projectChairStyle={settings.chairStyle}
                 minSpacing={settings.minSeatSpacing}
+                occupants={occupantsByTable.get(tbl.id) ?? NO_OCCUPANTS}
+                highlightIndex={highlightSeat && highlightSeat.tableId === tbl.id ? highlightSeat.index : null}
+                onSeatClick={(tableId, index) => setPickSeat({ tableId, index })}
                 onSelect={select}
                 onDragStartTable={handleDragStart}
                 onDragMove={handleDragMove}
@@ -682,6 +764,9 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
                 projectChairStyle={settings.chairStyle}
                 minSpacing={settings.minSeatSpacing}
                 weldedSides={weldedSidesByTable[tbl.id] ?? NO_SIDES}
+                occupants={occupantsByTable.get(tbl.id) ?? NO_OCCUPANTS}
+                highlightIndex={highlightSeat && highlightSeat.tableId === tbl.id ? highlightSeat.index : null}
+                onSeatClick={(tableId, index) => setPickSeat({ tableId, index })}
                 onSelect={select}
                 onDragStartTable={handleDragStart}
                 onDragMove={handleDragMove}
@@ -711,14 +796,14 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
 
       <TabBar />
 
-      <button
-        className="editor-corner editor-help"
-        onClick={onHelp}
-        title={t("help.title")}
-        aria-label={t("help.title")}
-      >
-        <Icon name="help" />
-      </button>
+      <div className="editor-corner editor-help">
+        <button onClick={onHelp} title={t("help.title")} aria-label={t("help.title")}>
+          <Icon name="keyboard" />
+        </button>
+        <button onClick={onLegend} title={t("legend.title")} aria-label={t("legend.title")}>
+          <Icon name="help" />
+        </button>
+      </div>
 
       <div className="editor-corner editor-undo">
         <button onClick={undo} disabled={!canUndo} title={t("common.undo")} aria-label={t("common.undo")}>
@@ -741,6 +826,10 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
           <Icon name="fit" />
         </button>
       </div>
+
+      {pickSeat && (
+        <SeatPickerModal tableId={pickSeat.tableId} index={pickSeat.index} onClose={() => setPickSeat(null)} />
+      )}
     </div>
   );
 }

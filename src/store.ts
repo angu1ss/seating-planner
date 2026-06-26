@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 import { temporal } from "zundo";
 import type {
   ChairStyle,
+  Guest,
   PathPoint,
   ProjectMeta,
   ProjectState,
@@ -63,6 +64,34 @@ export function activeSheet(s: { sheets: Sheet[]; activeSheetId: string }): Shee
 
 function patchActive(s: EditorState, patch: Partial<Sheet>): { sheets: Sheet[] } {
   return { sheets: s.sheets.map((sh) => (sh.id === s.activeSheetId ? { ...sh, ...patch } : sh)) };
+}
+
+/** Free the seats of any guests sitting at a table that's being removed. */
+function clearGuestSeats(guests: Guest[], removedTableIds: Set<string>): Guest[] {
+  return guests.map((g) => (g.seat && removedTableIds.has(g.seat.tableId) ? { ...g, seat: null } : g));
+}
+
+/** Coerce any persisted/imported guest into the current shape (drops removed roles/features). */
+function normalizeGuest(raw: unknown): Guest {
+  const g = (raw ?? {}) as Record<string, unknown>;
+  const roles = ["groom", "bride", "witness", "parent", "guest"];
+  const ages = ["adult", "child", "elderly"];
+  const feats = ["pregnant", "wheelchair", "hardOfHearing"];
+  const seat = g.seat as { tableId?: unknown; index?: unknown } | null | undefined;
+  const sexRaw = g.sex ?? g.gender; // `gender` was the old field name
+  return {
+    id: typeof g.id === "string" ? g.id : crypto.randomUUID(),
+    name: typeof g.name === "string" ? g.name : "",
+    role: (roles.includes(g.role as string) ? g.role : "guest") as Guest["role"],
+    ageCategory: (ages.includes(g.ageCategory as string) ? g.ageCategory : "adult") as Guest["ageCategory"],
+    sex: sexRaw === "male" || sexRaw === "female" ? sexRaw : null,
+    features: (Array.isArray(g.features) ? g.features.filter((f) => feats.includes(f)) : []) as Guest["features"],
+    relation: typeof g.relation === "string" ? g.relation : "",
+    seat:
+      seat && typeof seat.tableId === "string" && typeof seat.index === "number"
+        ? { tableId: seat.tableId, index: seat.index }
+        : null,
+  };
 }
 
 /** A weld group needs ≥2 members; clear groupId on any that are left alone. */
@@ -140,10 +169,19 @@ function makeTable(config: TableConfig, number: number, existing: TableModel[], 
 export interface EditorState extends ProjectState {
   selectedIds: string[];
   clipboard: TableSnapshot[] | null;
+  /** Guest whose seat is highlighted on the canvas (transient UI, not persisted/undoable). */
+  highlightGuestId: string | null;
 
   setProjectMeta: (patch: Partial<ProjectMeta>) => void;
   setVenue: (patch: Partial<Venue>) => void;
   setSettings: (patch: Partial<Settings>) => void;
+
+  addGuest: (data: Omit<Guest, "id" | "seat">) => void;
+  updateGuest: (id: string, patch: Partial<Guest>) => void;
+  removeGuest: (id: string) => void;
+  assignGuestToSeat: (guestId: string, tableId: string, index: number) => void;
+  unassignGuest: (guestId: string) => void;
+  setHighlightGuest: (id: string | null) => void;
 
   addSheet: () => void;
   setActiveSheet: (id: string) => void;
@@ -203,10 +241,37 @@ export const useStore = create<EditorState>()(
         ...createInitialState(),
         selectedIds: [],
         clipboard: null,
+        highlightGuestId: null,
 
         setProjectMeta: (patch) => set((s) => ({ project: { ...s.project, ...patch } })),
         setVenue: (patch) => set((s) => patchActive(s, { venue: { ...activeSheet(s).venue, ...patch } })),
         setSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+        addGuest: (data) =>
+          set((s) => ({ guests: [...s.guests, { id: crypto.randomUUID(), seat: null, ...data }] })),
+        updateGuest: (id, patch) =>
+          set((s) => ({ guests: s.guests.map((g) => (g.id === id ? { ...g, ...patch } : g)) })),
+        removeGuest: (id) => set((s) => ({ guests: s.guests.filter((g) => g.id !== id) })),
+        assignGuestToSeat: (guestId, tableId, index) =>
+          set((s) => {
+            const mover = s.guests.find((g) => g.id === guestId);
+            if (!mover) return {};
+            const from = mover.seat; // the mover's previous seat (may be null)
+            const sitting = s.guests.find(
+              (g) => g.id !== guestId && g.seat && g.seat.tableId === tableId && g.seat.index === index,
+            );
+            return {
+              guests: s.guests.map((g) => {
+                if (g.id === guestId) return { ...g, seat: { tableId, index } };
+                // Whoever was there swaps into the mover's old seat (or becomes unseated).
+                if (sitting && g.id === sitting.id) return { ...g, seat: from };
+                return g;
+              }),
+            };
+          }),
+        unassignGuest: (guestId) =>
+          set((s) => ({ guests: s.guests.map((g) => (g.id === guestId ? { ...g, seat: null } : g)) })),
+        setHighlightGuest: (id) => set({ highlightGuestId: id }),
 
         addSheet: () =>
           set((s) => {
@@ -352,6 +417,7 @@ export const useStore = create<EditorState>()(
             ...patchActive(s, {
               tables: dissolveSingletonGroups(activeSheet(s).tables.filter((t) => t.id !== id)),
             }),
+            guests: clearGuestSeats(s.guests, new Set([id])),
             selectedIds: s.selectedIds.filter((x) => x !== id),
           })),
 
@@ -384,6 +450,7 @@ export const useStore = create<EditorState>()(
               ...patchActive(s, {
                 tables: dissolveSingletonGroups(sh.tables.filter((t) => !removed.has(t.id))),
               }),
+              guests: clearGuestSeats(s.guests, removed),
               selectedIds: s.selectedIds.filter((id) => !removed.has(id)),
             };
           }),
@@ -767,6 +834,7 @@ export const useStore = create<EditorState>()(
                 tables: dissolveSingletonGroups(sh.tables.filter((t) => !delT.has(t.id))),
                 objects: sh.objects.filter((o) => !delO.has(o.id)),
               }),
+              guests: clearGuestSeats(s.guests, delT),
               selectedIds: s.selectedIds.filter((id) => !delT.has(id) && !delO.has(id)),
             };
           }),
@@ -808,6 +876,7 @@ export const useStore = create<EditorState>()(
             activeSheetId: doc.activeSheetId && sheets.some((sh) => sh.id === doc.activeSheetId)
               ? doc.activeSheetId
               : sheets[0].id,
+            guests: Array.isArray(doc.guests) ? doc.guests.map(normalizeGuest) : [],
             selectedIds: [],
           });
         },
@@ -822,12 +891,13 @@ export const useStore = create<EditorState>()(
             settings: s.settings,
             sheets: s.sheets,
             activeSheetId: s.activeSheetId,
+            guests: s.guests,
           };
         },
       }),
       {
         name: STORAGE_KEY,
-        version: 2,
+        version: 3,
         migrate: (persisted: unknown) => {
           let p = persisted as Partial<ProjectState> & {
             venue?: Venue;
@@ -868,6 +938,10 @@ export const useStore = create<EditorState>()(
               })),
             };
           }
+          // v2 -> v3: guests gained gender/relation, lost childAge/vip — normalise them.
+          if (p && Array.isArray(p.guests)) {
+            p = { ...p, guests: p.guests.map(normalizeGuest) };
+          }
           return p;
         },
         partialize: (s) => ({
@@ -876,6 +950,7 @@ export const useStore = create<EditorState>()(
           settings: s.settings,
           sheets: s.sheets,
           activeSheetId: s.activeSheetId,
+          guests: s.guests,
         }),
       },
     ),
@@ -885,6 +960,7 @@ export const useStore = create<EditorState>()(
         project: state.project,
         settings: state.settings,
         sheets: state.sheets,
+        guests: state.guests,
       }),
       limit: 100,
       handleSet: (handleSet) => debounce(handleSet, 250),
