@@ -81,7 +81,6 @@ export interface Settings {
   /** Comfortable minimum spacing between guests, meters. Below this => "tight" warning. */
   minSeatSpacing: number;
   chairStyle: ChairStyle;
-  theme: Theme;
 }
 
 export interface ProjectMeta {

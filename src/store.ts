@@ -167,7 +167,7 @@ export const useStore = create<EditorState>()(
 
         addSheet: () =>
           set((s) => {
-            const sheet = createSheet(`Hall ${s.sheets.length + 1}`);
+            const sheet = createSheet("");
             return { sheets: [...s.sheets, sheet], activeSheetId: sheet.id, selectedIds: [] };
           }),
         setActiveSheet: (id) => set({ activeSheetId: id, selectedIds: [] }),
@@ -547,28 +547,41 @@ export const useStore = create<EditorState>()(
       }),
       {
         name: STORAGE_KEY,
-        version: 1,
-        // Migrate the pre-sheets layout (flat venue/tables/objects) into one sheet.
+        version: 2,
         migrate: (persisted: unknown) => {
-          const p = persisted as Partial<ProjectState> & {
+          let p = persisted as Partial<ProjectState> & {
             venue?: Venue;
             tables?: TableModel[];
             objects?: SceneObject[];
           };
+          // v0: flat venue/tables/objects -> a single sheet.
           if (p && !p.sheets) {
             const sheet: Sheet = {
               id: crypto.randomUUID(),
-              name: "Hall 1",
-              venue: p.venue ?? createSheet("Hall 1").venue,
+              name: "",
+              venue: p.venue ?? createSheet("").venue,
               tables: p.tables ?? [],
               objects: p.objects ?? [],
             };
-            return {
+            p = {
               schemaVersion: p.schemaVersion ?? SCHEMA_VERSION,
               project: p.project,
               settings: p.settings,
               sheets: [sheet],
               activeSheetId: sheet.id,
+            };
+          }
+          // v1 -> v2: theme moved to app prefs; blank auto-generated hall names so they localize.
+          if (p && Array.isArray(p.sheets)) {
+            const sheets = p.sheets;
+            if (p.settings && "theme" in p.settings) {
+              const settings = { ...p.settings } as Record<string, unknown>;
+              delete settings.theme;
+              p = { ...p, settings: settings as unknown as Settings };
+            }
+            p = {
+              ...p,
+              sheets: sheets.map((sh) => (/^Hall \d+$/.test(sh.name) ? { ...sh, name: "" } : sh)),
             };
           }
           return p;

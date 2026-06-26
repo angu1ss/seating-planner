@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useStore } from "../../store";
 import { useT } from "../../i18n";
+import { useMediaQuery } from "../../utils/useMediaQuery";
 import { Icon } from "../Icon";
 import { SettingsMenu } from "./SettingsMenu";
+import { AppActions } from "./AppActions";
 
 interface Props {
   onToggleLeft: () => void;
@@ -14,6 +16,8 @@ export function Toolbar({ onToggleLeft, onSettings }: Props) {
   const project = useStore((s) => s.project);
   const setProjectMeta = useStore((s) => s.setProjectMeta);
   const [editing, setEditing] = useState(false);
+  // Wide enough to keep the actions on the bar; otherwise collapse into the gear menu.
+  const wide = useMediaQuery("(min-width: 980px)");
 
   return (
     <header className="toolbar">
@@ -43,7 +47,21 @@ export function Toolbar({ onToggleLeft, onSettings }: Props) {
       </div>
 
       <div className="toolbar-group">
-        <SettingsMenu onProjectSettings={onSettings} />
+        {wide ? (
+          <>
+            <AppActions layout="bar" />
+            <button
+              className="icon-btn"
+              onClick={onSettings}
+              title={t("settings.gear")}
+              aria-label={t("settings.gear")}
+            >
+              <Icon name="settings" />
+            </button>
+          </>
+        ) : (
+          <SettingsMenu onProjectSettings={onSettings} />
+        )}
       </div>
     </header>
   );

@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { useT } from "../../i18n";
+import { useEscClose } from "../../utils/useEscClose";
 import { Icon } from "../Icon";
 
 const ROWS: { keys: string; k: string }[] = [
@@ -18,14 +18,7 @@ const ROWS: { keys: string; k: string }[] = [
 
 export function ShortcutsModal({ onClose }: { onClose: () => void }) {
   const t = useT();
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscClose(onClose);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

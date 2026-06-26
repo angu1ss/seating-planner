@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { useT } from "../../i18n";
+import { useEscClose } from "../../utils/useEscClose";
 import { Icon } from "../Icon";
 
 interface Props {
@@ -13,14 +13,7 @@ interface Props {
 
 export function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onClose }: Props) {
   const t = useT();
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscClose(onClose);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

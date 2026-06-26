@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore, activeSheet } from "./store";
+import { useT, useI18n } from "./i18n";
 import { Toolbar } from "./components/panels/Toolbar";
 import { LeftPanel } from "./components/panels/LeftPanel";
 import { TablePanel } from "./components/panels/TablePanel";
@@ -13,7 +14,9 @@ import { ProjectSettingsModal } from "./components/panels/ProjectSettingsModal";
 import { FloorCanvas } from "./components/canvas/FloorCanvas";
 
 export default function App() {
-  const theme = useStore((s) => s.settings.theme);
+  const t = useT();
+  const theme = useI18n((s) => s.theme);
+  const projectName = useStore((s) => s.project.name);
   const selectedIds = useStore((s) => s.selectedIds);
   const tables = useStore((s) => activeSheet(s).tables);
   const [leftOpen, setLeftOpen] = useState(false);
@@ -25,6 +28,11 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    const name = projectName.trim() || t("project.untitled");
+    document.title = `${name} — ${t("app.fullName")}`;
+  }, [projectName, t]);
 
   // On phones, reveal the side panel as soon as something is selected.
   useEffect(() => {

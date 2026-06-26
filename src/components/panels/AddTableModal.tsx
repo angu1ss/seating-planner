@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useState } from "react";
 import { useStore } from "../../store";
 import { useT } from "../../i18n";
+import { useEscClose } from "../../utils/useEscClose";
+import { useDraggablePanel } from "../../utils/useDraggablePanel";
 import { TABLE_PRESETS, presetLabel } from "../../constants";
 import type { ChairStyle, TableShape } from "../../types";
 import { Icon } from "../Icon";
@@ -24,38 +25,8 @@ export function AddTableModal({ onClose }: Props) {
   const [count, setCount] = useState(1);
   const [activePreset, setActivePreset] = useState(first.id);
 
-  // Draggable panel position.
-  const [panelPos, setPanelPos] = useState({ x: 24, y: 72 });
-  const drag = useRef<{ dx: number; dy: number } | null>(null);
-
-  const onPointerMove = useCallback((e: PointerEvent) => {
-    if (!drag.current) return;
-    setPanelPos({ x: e.clientX - drag.current.dx, y: e.clientY - drag.current.dy });
-  }, []);
-  const onPointerUp = useCallback(() => {
-    drag.current = null;
-    window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", onPointerUp);
-  }, [onPointerMove]);
-  const onHeaderDown = (e: ReactPointerEvent) => {
-    drag.current = { dx: e.clientX - panelPos.x, dy: e.clientY - panelPos.y };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-  };
-  useEffect(
-    () => () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    },
-    [onPointerMove, onPointerUp],
-  );
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const { pos: panelPos, onHeaderPointerDown } = useDraggablePanel({ x: 24, y: 72 });
+  useEscClose(onClose);
 
   const applyPreset = (id: string) => {
     const p = TABLE_PRESETS.find((x) => x.id === id);
@@ -86,7 +57,7 @@ export function AddTableModal({ onClose }: Props) {
 
   return (
     <div className="float-panel" style={{ left: panelPos.x, top: panelPos.y }} role="dialog" aria-label={t("modal.title")}>
-      <div className="float-head" onPointerDown={onHeaderDown}>
+      <div className="float-head" onPointerDown={onHeaderPointerDown}>
         <h2>{t("modal.title")}</h2>
         <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}><Icon name="close" /></button>
       </div>

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { Theme } from "./types";
 
 export type Lang = "en" | "ru";
 
@@ -7,6 +8,7 @@ type Dict = Record<string, string>;
 
 const en: Dict = {
   "app.name": "Seating",
+  "app.fullName": "Seating Planner",
   "common.open": "Import",
   "common.save": "Export",
   "common.reset": "Reset",
@@ -19,6 +21,8 @@ const en: Dict = {
   "settings.title": "Project settings",
   "settings.gear": "Settings",
   "sheet.add": "Add hall",
+  "sheet.name": "Hall",
+  "sheet.rename": "Rename hall",
   "sheet.remove": "Remove hall",
   "sheet.removeConfirm": "Remove this hall and everything on it?",
   "common.add": "Add",
@@ -135,6 +139,7 @@ const en: Dict = {
 
 const ru: Dict = {
   "app.name": "Рассадка",
+  "app.fullName": "Планировщик рассадки",
   "common.open": "Импорт",
   "common.save": "Экспорт",
   "common.reset": "Сброс",
@@ -147,6 +152,8 @@ const ru: Dict = {
   "settings.title": "Настройки проекта",
   "settings.gear": "Настройки",
   "sheet.add": "Добавить зал",
+  "sheet.name": "Зал",
+  "sheet.rename": "Переименовать зал",
   "sheet.remove": "Удалить зал",
   "sheet.removeConfirm": "Удалить этот зал со всем содержимым?",
   "common.add": "Добавить",
@@ -271,16 +278,31 @@ function detectLang(): Lang {
   return "en";
 }
 
-interface I18nState {
-  lang: Lang;
-  setLang: (lang: Lang) => void;
+function detectTheme(): Theme {
+  if (typeof window !== "undefined" && window.matchMedia) {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "light";
 }
 
-export const useI18n = create<I18nState>()(
+/**
+ * App-level preferences (language, theme). These are viewer settings, not part of
+ * the project document — so they live outside the project store and outside undo/redo.
+ */
+interface AppPrefsState {
+  lang: Lang;
+  setLang: (lang: Lang) => void;
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+}
+
+export const useI18n = create<AppPrefsState>()(
   persist(
     (set) => ({
       lang: detectLang(),
       setLang: (lang) => set({ lang }),
+      theme: detectTheme(),
+      setTheme: (theme) => set({ theme }),
     }),
     { name: "seating-planner:lang" },
   ),

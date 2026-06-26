@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useStore, activeSheet } from "../../store";
 import { useT } from "../../i18n";
+import { useEscClose } from "../../utils/useEscClose";
 import { Icon } from "../Icon";
 import { ConfirmModal } from "./ConfirmModal";
 
@@ -19,14 +20,7 @@ export function ProjectSettingsModal({ onClose }: Props) {
   const resetProject = useStore((s) => s.resetProject);
 
   const [confirmReset, setConfirmReset] = useState(false);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !confirmReset) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, confirmReset]);
+  useEscClose(onClose, !confirmReset);
 
   return (
     <>

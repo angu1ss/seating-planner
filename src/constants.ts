@@ -90,11 +90,11 @@ export function createSheet(name: string): Sheet {
 }
 
 export function createInitialState(): ProjectState {
-  const sheet = createSheet("Hall 1");
+  const sheet = createSheet("");
   return {
     schemaVersion: SCHEMA_VERSION,
     project: { id: crypto.randomUUID(), name: "", eventType: "wedding", date: "", note: "" },
-    settings: { minSeatSpacing: 0.65, chairStyle: "round", theme: "light" },
+    settings: { minSeatSpacing: 0.65, chairStyle: "round" },
     sheets: [sheet],
     activeSheetId: sheet.id,
   };

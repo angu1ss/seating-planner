@@ -4,7 +4,7 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import type { TableModel } from "../../types";
 import { useStore, undo, redo, activeSheet, useCanUndo, useCanRedo } from "../../store";
 import { getPalette } from "../../theme";
-import { useT } from "../../i18n";
+import { useT, useI18n } from "../../i18n";
 import { clampTableCenter, findFreeSpot, tableOuterExtent, tablesOverlap, tooCloseTables } from "../../geometry";
 import { objectLabelKey } from "../../constants";
 import { downloadJSON, slugify } from "../../utils/file";
@@ -101,7 +101,8 @@ export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
   const getDocument = useStore((s) => s.getDocument);
   const projectName = useStore((s) => s.project.name);
 
-  const palette = getPalette(settings.theme);
+  const theme = useI18n((s) => s.theme);
+  const palette = getPalette(theme);
   const panMode = spaceDown || coarse;
 
   useLayoutEffect(() => {

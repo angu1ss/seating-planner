@@ -17,42 +17,61 @@ export function TabBar() {
 
   return (
     <div className="tab-bar">
-      {sheets.map((sh) => (
-        <div
-          key={sh.id}
-          className={`tab ${sh.id === activeId ? "active" : ""}`}
-          onClick={() => setActive(sh.id)}
-          onDoubleClick={() => setEditing(sh.id)}
-        >
-          {editing === sh.id ? (
-            <input
-              autoFocus
-              className="tab-input"
-              value={sh.name}
-              onChange={(e) => renameSheet(sh.id, e.target.value)}
-              onBlur={() => setEditing(null)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === "Escape") setEditing(null);
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="tab-name">{sh.name}</span>
-          )}
-          {sheets.length > 1 && editing !== sh.id && (
-            <button
-              className="tab-close"
-              aria-label={t("common.delete")}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPendingRemove(sh.id);
-              }}
-            >
-              <Icon name="close" />
-            </button>
-          )}
-        </div>
-      ))}
+      {sheets.map((sh, i) => {
+        const defaultName = `${t("sheet.name")} ${i + 1}`;
+        const isActive = sh.id === activeId;
+        const isEditing = editing === sh.id;
+        return (
+          <div
+            key={sh.id}
+            className={`tab ${isActive ? "active" : ""}`}
+            onClick={() => setActive(sh.id)}
+            onDoubleClick={() => setEditing(sh.id)}
+          >
+            {isEditing ? (
+              <input
+                autoFocus
+                className="tab-input"
+                value={sh.name}
+                placeholder={defaultName}
+                onChange={(e) => renameSheet(sh.id, e.target.value)}
+                onBlur={() => setEditing(null)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") setEditing(null);
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="tab-name">{sh.name.trim() || defaultName}</span>
+            )}
+            {isActive && !isEditing && (
+              <button
+                className="tab-icon"
+                aria-label={t("sheet.rename")}
+                title={t("sheet.rename")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(sh.id);
+                }}
+              >
+                <Icon name="edit" />
+              </button>
+            )}
+            {sheets.length > 1 && !isEditing && (
+              <button
+                className="tab-icon tab-close"
+                aria-label={t("common.delete")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPendingRemove(sh.id);
+                }}
+              >
+                <Icon name="close" />
+              </button>
+            )}
+          </div>
+        );
+      })}
       <button className="tab-add" onClick={addSheet} title={t("sheet.add")} aria-label={t("sheet.add")}>
         <Icon name="add" />
       </button>
