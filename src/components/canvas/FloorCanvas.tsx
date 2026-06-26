@@ -6,7 +6,9 @@ import { useStore } from "../../store";
 import { getPalette } from "../../theme";
 import { useT } from "../../i18n";
 import { clampTableCenter, findFreeSpot, tableOuterExtent, tablesOverlap, tooCloseTables } from "../../geometry";
+import { objectLabelKey } from "../../constants";
 import { TableNode } from "./TableNode";
+import { ObjectNode } from "./ObjectNode";
 
 /** Pixels per meter at zoom = 1. */
 const PPM = 50;
@@ -66,9 +68,13 @@ export function FloorCanvas() {
 
   const venue = useStore((s) => s.venue);
   const tables = useStore((s) => s.tables);
+  const objects = useStore((s) => s.objects);
   const settings = useStore((s) => s.settings);
   const selectedIds = useStore((s) => s.selectedIds);
+  const selectedObjectId = useStore((s) => s.selectedObjectId);
   const select = useStore((s) => s.select);
+  const selectObject = useStore((s) => s.selectObject);
+  const updateObject = useStore((s) => s.updateObject);
   const selectMany = useStore((s) => s.selectMany);
   const clearSelection = useStore((s) => s.clearSelection);
   const updateTable = useStore((s) => s.updateTable);
@@ -206,7 +212,7 @@ export function FloorCanvas() {
     const starts: Record<string, { x: number; y: number }> = {};
     for (const sid of sel) {
       const tt = byId.get(sid);
-      if (tt) starts[sid] = { x: tt.x, y: tt.y };
+      if (tt && !tt.locked) starts[sid] = { x: tt.x, y: tt.y };
     }
     const dragged = byId.get(id);
     groupDrag.current = {
@@ -294,6 +300,31 @@ export function FloorCanvas() {
     const cy = Math.min(Math.max(minY, my), maxY);
     return { x: cx * PPM * scale + pos.x, y: cy * PPM * scale + pos.y };
   };
+
+  const clampAxis = (c: number, size: number, max: number) => {
+    const lo = size / 2;
+    const hi = Math.max(lo, max - size / 2);
+    return Number(Math.min(Math.max(lo, c), hi).toFixed(3));
+  };
+
+  const handleObjectMove = (id: string, x: number, y: number) => {
+    const obj = objects.find((o) => o.id === id);
+    if (!obj) return;
+    updateObject(id, { x: clampAxis(snapV(x), obj.w, venue.width), y: clampAxis(snapV(y), obj.h, venue.height) });
+  };
+
+  const makeObjectDragBound =
+    (obj: { w: number; h: number }) => (absPos: { x: number; y: number }) => {
+      const minX = obj.w / 2;
+      const maxX = Math.max(obj.w / 2, venue.width - obj.w / 2);
+      const minY = obj.h / 2;
+      const maxY = Math.max(obj.h / 2, venue.height - obj.h / 2);
+      const mx = (absPos.x - pos.x) / scale / PPM;
+      const my = (absPos.y - pos.y) / scale / PPM;
+      const cx = Math.min(Math.max(minX, mx), maxX);
+      const cy = Math.min(Math.max(minY, my), maxY);
+      return { x: cx * PPM * scale + pos.x, y: cy * PPM * scale + pos.y };
+    };
 
   // Space-to-pan toggle.
   useEffect(() => {
@@ -390,6 +421,7 @@ export function FloorCanvas() {
 
   return (
     <div ref={containerRef} className="canvas-wrap" style={{ background: palette.bg, cursor }}>
+      {size.w > 0 && size.h > 0 && (
       <Stage
         width={size.w}
         height={size.h}
@@ -427,13 +459,27 @@ export function FloorCanvas() {
           {gridLines.map((pts, i) => (
             <Line key={i} points={pts} stroke={palette.grid} strokeWidth={1} listening={false} />
           ))}
+          {objects.map((o) => (
+            <ObjectNode
+              key={o.id}
+              obj={o}
+              selected={o.id === selectedObjectId}
+              panLocked={spaceDown}
+              ppm={PPM}
+              palette={palette}
+              label={o.label.trim() || t(objectLabelKey(o.type))}
+              onSelect={selectObject}
+              onMove={handleObjectMove}
+              dragBound={makeObjectDragBound(o)}
+            />
+          ))}
           {tables.map((tbl) => (
             <TableNode
               key={tbl.id}
               table={tbl}
               selected={selectedIds.includes(tbl.id)}
               tooClose={tooCloseSet.has(tbl.id)}
-              locked={spaceDown}
+              panLocked={spaceDown}
               ppm={PPM}
               palette={palette}
               projectChairStyle={settings.chairStyle}
@@ -456,10 +502,12 @@ export function FloorCanvas() {
               stroke={palette.tableSelected}
               strokeWidth={1}
               listening={false}
+              perfectDrawEnabled={false}
             />
           )}
         </Layer>
       </Stage>
+      )}
 
       <div className="zoom-controls">
         <button onClick={() => zoomBy(1.2)} title={t("zoom.in")} aria-label={t("zoom.in")}>+</button>

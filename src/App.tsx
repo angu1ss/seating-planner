@@ -3,14 +3,18 @@ import { useStore } from "./store";
 import { Toolbar } from "./components/panels/Toolbar";
 import { LeftPanel } from "./components/panels/LeftPanel";
 import { TablePanel } from "./components/panels/TablePanel";
+import { ObjectPanel } from "./components/panels/ObjectPanel";
 import { AddTableModal } from "./components/panels/AddTableModal";
+import { AddObjectModal } from "./components/panels/AddObjectModal";
 import { FloorCanvas } from "./components/canvas/FloorCanvas";
 
 export default function App() {
   const theme = useStore((s) => s.settings.theme);
+  const selectedObjectId = useStore((s) => s.selectedObjectId);
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [addObjOpen, setAddObjOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -26,13 +30,17 @@ export default function App() {
               setAddOpen(true);
               setLeftOpen(false);
             }}
+            onAddObject={() => {
+              setAddObjOpen(true);
+              setLeftOpen(false);
+            }}
           />
         </aside>
         <main className="canvas-area">
           <FloorCanvas />
         </main>
         <aside className={`side right ${rightOpen ? "open" : ""}`}>
-          <TablePanel />
+          {selectedObjectId ? <ObjectPanel /> : <TablePanel />}
         </aside>
         {(leftOpen || rightOpen) && (
           <div
@@ -45,6 +53,7 @@ export default function App() {
         )}
       </div>
       {addOpen && <AddTableModal onClose={() => setAddOpen(false)} />}
+      {addObjOpen && <AddObjectModal onClose={() => setAddObjOpen(false)} />}
     </div>
   );
 }

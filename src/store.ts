@@ -4,13 +4,27 @@ import type {
   ChairStyle,
   ProjectMeta,
   ProjectState,
+  SceneObject,
+  SceneObjectType,
   Settings,
   TableModel,
   TableShape,
   Venue,
 } from "./types";
-import { CHAIR_OFFSET, CHAIR_RADIUS, SCHEMA_VERSION, createInitialState } from "./constants";
+import {
+  CHAIR_OFFSET,
+  CHAIR_RADIUS,
+  OBJECT_PRESETS,
+  SCHEMA_VERSION,
+  createInitialState,
+} from "./constants";
 import { findFreeSpot } from "./geometry";
+
+const clampAxis = (center: number, size: number, max: number) => {
+  const lo = size / 2;
+  const hi = Math.max(lo, max - size / 2);
+  return Math.min(Math.max(lo, center), hi);
+};
 
 const STORAGE_KEY = "seating-planner:v1";
 
@@ -21,6 +35,13 @@ export interface TableConfig {
   seatCount: number;
   chairStyle: ChairStyle | null;
   name?: string;
+}
+
+export interface ObjectConfig {
+  type: SceneObjectType;
+  w: number;
+  h: number;
+  label?: string;
 }
 
 type TableSnapshot = Omit<TableModel, "id" | "number">;
@@ -61,23 +82,36 @@ function makeTable(config: TableConfig, number: number, existing: TableModel[], 
     isPodium: false,
     chairStyle: config.chairStyle,
     disabledSides: [],
+    locked: false,
   };
 }
 
 export interface EditorState extends ProjectState {
   selectedIds: string[];
+  selectedObjectId: string | null;
   clipboard: TableSnapshot[] | null;
 
   setProjectMeta: (patch: Partial<ProjectMeta>) => void;
   setVenue: (patch: Partial<Venue>) => void;
   setSettings: (patch: Partial<Settings>) => void;
 
+  addObject: (type: SceneObjectType) => void;
+  addObjectsFrom: (config: ObjectConfig, count: number) => void;
+  updateObject: (id: string, patch: Partial<SceneObject>) => void;
+  updateObjects: (ids: string[], patch: Partial<SceneObject>) => void;
+  removeObject: (id: string) => void;
+  removeObjects: (ids: string[]) => void;
+  duplicateObjects: (ids: string[]) => void;
+  selectObject: (id: string) => void;
+
   addTablesFrom: (config: TableConfig, count: number) => void;
   updateTable: (id: string, patch: Partial<TableModel>) => void;
   updateTables: (ids: string[], patch: Partial<TableModel>) => void;
   setPositions: (list: { id: string; x: number; y: number }[]) => void;
   removeTable: (id: string) => void;
+  removeTables: (ids: string[]) => void;
   duplicateTable: (id: string) => void;
+  duplicateTables: (ids: string[]) => void;
 
   select: (id: string, additive?: boolean) => void;
   selectMany: (ids: string[]) => void;
@@ -99,11 +133,95 @@ export const useStore = create<EditorState>()(
     (set, get) => ({
       ...createInitialState(),
       selectedIds: [],
+      selectedObjectId: null,
       clipboard: null,
 
       setProjectMeta: (patch) => set((s) => ({ project: { ...s.project, ...patch } })),
       setVenue: (patch) => set((s) => ({ venue: { ...s.venue, ...patch } })),
       setSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+      addObject: (type) =>
+        set((s) => {
+          const preset = OBJECT_PRESETS.find((p) => p.type === type) ?? OBJECT_PRESETS[0];
+          const obj: SceneObject = {
+            id: crypto.randomUUID(),
+            type,
+            x: clampAxis(s.venue.width / 2, preset.w, s.venue.width),
+            y: clampAxis(s.venue.height / 2, preset.h, s.venue.height),
+            w: preset.w,
+            h: preset.h,
+            rotation: 0,
+            label: "",
+            locked: false,
+          };
+          return { objects: [...s.objects, obj], selectedObjectId: obj.id, selectedIds: [] };
+        }),
+
+      addObjectsFrom: (config, count) =>
+        set((s) => {
+          const objects = [...s.objects];
+          let lastId: string | null = s.selectedObjectId;
+          for (let i = 0; i < Math.max(1, count); i++) {
+            const stagger = (i % 6) * 0.4;
+            const obj: SceneObject = {
+              id: crypto.randomUUID(),
+              type: config.type,
+              x: clampAxis(s.venue.width / 2 + stagger, config.w, s.venue.width),
+              y: clampAxis(s.venue.height / 2 + stagger, config.h, s.venue.height),
+              w: config.w,
+              h: config.h,
+              rotation: 0,
+              label: config.label ?? "",
+              locked: false,
+            };
+            objects.push(obj);
+            lastId = obj.id;
+          }
+          return { objects, selectedObjectId: lastId, selectedIds: [] };
+        }),
+
+      updateObject: (id, patch) =>
+        set((s) => ({ objects: s.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)) })),
+
+      updateObjects: (ids, patch) =>
+        set((s) => ({ objects: s.objects.map((o) => (ids.includes(o.id) ? { ...o, ...patch } : o)) })),
+
+      removeObject: (id) =>
+        set((s) => ({
+          objects: s.objects.filter((o) => o.id !== id),
+          selectedObjectId: s.selectedObjectId === id ? null : s.selectedObjectId,
+        })),
+
+      removeObjects: (ids) =>
+        set((s) => {
+          const removable = new Set(
+            s.objects.filter((o) => ids.includes(o.id) && !o.locked).map((o) => o.id),
+          );
+          return {
+            objects: s.objects.filter((o) => !removable.has(o.id)),
+            selectedObjectId:
+              s.selectedObjectId && removable.has(s.selectedObjectId) ? null : s.selectedObjectId,
+          };
+        }),
+
+      duplicateObjects: (ids) =>
+        set((s) => {
+          const sel = s.objects.filter((o) => ids.includes(o.id));
+          if (!sel.length) return {};
+          const objects = [...s.objects];
+          for (const src of sel) {
+            objects.push({
+              ...src,
+              id: crypto.randomUUID(),
+              locked: false,
+              x: clampAxis(src.x + 0.4, src.w, s.venue.width),
+              y: clampAxis(src.y + 0.4, src.h, s.venue.height),
+            });
+          }
+          return { objects };
+        }),
+
+      selectObject: (id) => set({ selectedObjectId: id, selectedIds: [] }),
 
       addTablesFrom: (config, count) =>
         set((s) => {
@@ -155,18 +273,56 @@ export const useStore = create<EditorState>()(
             x: spot.x,
             y: spot.y,
             disabledSides: [...src.disabledSides],
+            locked: false,
           };
           return { tables: [...s.tables, copy], selectedIds: [copy.id] };
         }),
 
+      removeTables: (ids) =>
+        set((s) => {
+          const removed = new Set(
+            s.tables.filter((t) => ids.includes(t.id) && !t.locked).map((t) => t.id),
+          );
+          return {
+            tables: s.tables.filter((t) => !removed.has(t.id)),
+            selectedIds: s.selectedIds.filter((id) => !removed.has(id)),
+          };
+        }),
+
+      duplicateTables: (ids) =>
+        set((s) => {
+          const sel = s.tables.filter((t) => ids.includes(t.id));
+          if (!sel.length) return {};
+          const tables = [...s.tables];
+          const newIds: string[] = [];
+          for (const src of sel) {
+            const spot = findFreeSpot(tables, src.w, src.h, s.venue, { x: src.x + 0.4, y: src.y + 0.4 });
+            tables.push({
+              ...src,
+              id: crypto.randomUUID(),
+              number: nextFreeNumber(tables),
+              name: "",
+              x: spot.x,
+              y: spot.y,
+              disabledSides: [...src.disabledSides],
+              locked: false,
+            });
+            newIds.push(tables[tables.length - 1].id);
+          }
+          return { tables, selectedIds: newIds };
+        }),
+
       select: (id, additive = false) =>
         set((s) => {
-          if (!additive) return { selectedIds: [id] };
+          if (!additive) return { selectedIds: [id], selectedObjectId: null };
           const has = s.selectedIds.includes(id);
-          return { selectedIds: has ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id] };
+          return {
+            selectedIds: has ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id],
+            selectedObjectId: null,
+          };
         }),
-      selectMany: (ids) => set({ selectedIds: ids }),
-      clearSelection: () => set({ selectedIds: [] }),
+      selectMany: (ids) => set({ selectedIds: ids, selectedObjectId: null }),
+      clearSelection: () => set({ selectedIds: [], selectedObjectId: null }),
 
       copySelected: () =>
         set((s) => {
@@ -194,6 +350,7 @@ export const useStore = create<EditorState>()(
               x: spot.x,
               y: spot.y,
               disabledSides: [...c.disabledSides],
+              locked: false,
             };
             tables.push(t);
             newIds.push(t.id);
@@ -217,6 +374,7 @@ export const useStore = create<EditorState>()(
               x: spot.x,
               y: spot.y,
               disabledSides: [...src.disabledSides],
+              locked: false,
             };
             tables.push(copy);
             newIds.push(copy.id);
@@ -225,10 +383,20 @@ export const useStore = create<EditorState>()(
         }),
 
       deleteSelected: () =>
-        set((s) => ({
-          tables: s.tables.filter((t) => !s.selectedIds.includes(t.id)),
-          selectedIds: [],
-        })),
+        set((s) => {
+          if (s.selectedObjectId) {
+            const obj = s.objects.find((o) => o.id === s.selectedObjectId);
+            if (obj?.locked) return {};
+            return {
+              objects: s.objects.filter((o) => o.id !== s.selectedObjectId),
+              selectedObjectId: null,
+            };
+          }
+          return {
+            tables: s.tables.filter((t) => !(s.selectedIds.includes(t.id) && !t.locked)),
+            selectedIds: [],
+          };
+        }),
 
       nudgeSelected: (dx, dy) =>
         set((s) => {
@@ -236,7 +404,7 @@ export const useStore = create<EditorState>()(
           const step = s.venue.snapToGrid ? s.venue.gridStep || 0.5 : s.venue.snapStep || 0.1;
           return {
             tables: s.tables.map((t) =>
-              s.selectedIds.includes(t.id)
+              s.selectedIds.includes(t.id) && !t.locked
                 ? {
                     ...t,
                     x: Number(clampCenter(t.x + dx * step, t.w, s.venue.width).toFixed(3)),
@@ -253,11 +421,18 @@ export const useStore = create<EditorState>()(
           project: doc.project,
           venue: doc.venue,
           settings: doc.settings,
-          tables: (doc.tables ?? []).map((t, i) => ({ ...t, number: t.number ?? i + 1 })),
+          tables: (doc.tables ?? []).map((t, i) => ({
+            ...t,
+            number: t.number ?? i + 1,
+            locked: t.locked ?? false,
+          })),
+          objects: (doc.objects ?? []).map((o) => ({ ...o, locked: o.locked ?? false })),
           selectedIds: [],
+          selectedObjectId: null,
         }),
 
-      resetProject: () => set({ ...createInitialState(), selectedIds: [], clipboard: null }),
+      resetProject: () =>
+        set({ ...createInitialState(), selectedIds: [], selectedObjectId: null, clipboard: null }),
 
       getDocument: () => {
         const s = get();
@@ -267,6 +442,7 @@ export const useStore = create<EditorState>()(
           venue: s.venue,
           settings: s.settings,
           tables: s.tables,
+          objects: s.objects,
         };
       },
     }),
@@ -278,6 +454,7 @@ export const useStore = create<EditorState>()(
         venue: s.venue,
         settings: s.settings,
         tables: s.tables,
+        objects: s.objects,
       }),
     },
   ),

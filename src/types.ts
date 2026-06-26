@@ -37,6 +37,34 @@ export interface TableModel {
   chairStyle: ChairStyle | null;
   /** Sides with seating disabled (rect only, for now). */
   disabledSides: Side[];
+  /** When locked, the table can't be moved/edited/deleted — only selected to unlock. */
+  locked: boolean;
+}
+
+export type SceneObjectType =
+  | "stage"
+  | "screen"
+  | "stageScreen"
+  | "dancefloor"
+  | "bar"
+  | "entrance"
+  | "giftTable"
+  | "columnRound"
+  | "columnSquare";
+
+export interface SceneObject {
+  id: string;
+  type: SceneObjectType;
+  /** Center position in meters. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+  /** Custom label; empty string = use the localized default for the type. */
+  label: string;
+  /** When locked, the object can't be moved/edited/deleted — only selected to unlock. */
+  locked: boolean;
 }
 
 export interface Venue {
@@ -70,4 +98,5 @@ export interface ProjectState {
   venue: Venue;
   settings: Settings;
   tables: TableModel[];
+  objects: SceneObject[];
 }

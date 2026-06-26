@@ -1,0 +1,117 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { useStore } from "../../store";
+import { useT } from "../../i18n";
+import { OBJECT_PRESETS, ROUND_OBJECT_TYPES, objectLabelKey } from "../../constants";
+import type { SceneObjectType } from "../../types";
+
+interface Props {
+  onClose: () => void;
+}
+
+export function AddObjectModal({ onClose }: Props) {
+  const t = useT();
+  const addObjectsFrom = useStore((s) => s.addObjectsFrom);
+
+  const first = OBJECT_PRESETS[0];
+  const [type, setType] = useState<SceneObjectType>(first.type);
+  const [w, setW] = useState(first.w);
+  const [h, setH] = useState(first.h);
+  const [label, setLabel] = useState("");
+  const [count, setCount] = useState(1);
+
+  const [panelPos, setPanelPos] = useState({ x: 24, y: 120 });
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+
+  const onPointerMove = useCallback((e: PointerEvent) => {
+    if (!drag.current) return;
+    setPanelPos({ x: e.clientX - drag.current.dx, y: e.clientY - drag.current.dy });
+  }, []);
+  const onPointerUp = useCallback(() => {
+    drag.current = null;
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+  }, [onPointerMove]);
+  const onHeaderDown = (e: ReactPointerEvent) => {
+    drag.current = { dx: e.clientX - panelPos.x, dy: e.clientY - panelPos.y };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  };
+  useEffect(
+    () => () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    },
+    [onPointerMove, onPointerUp],
+  );
+
+  const applyType = (tp: SceneObjectType) => {
+    const p = OBJECT_PRESETS.find((x) => x.type === tp);
+    if (!p) return;
+    setType(tp);
+    setW(p.w);
+    setH(p.h);
+  };
+
+  const submit = () => {
+    addObjectsFrom(
+      { type, w: Math.max(0.2, w), h: Math.max(0.2, h), label: label.trim() || undefined },
+      Math.max(1, count),
+    );
+  };
+
+  const m = t("unit.m");
+
+  return (
+    <div className="float-panel" style={{ left: panelPos.x, top: panelPos.y }} role="dialog" aria-label={t("obj.add")}>
+      <div className="float-head" onPointerDown={onHeaderDown}>
+        <h2>{t("obj.add")}</h2>
+        <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}>✕</button>
+      </div>
+
+      <div className="float-body">
+        <h3>{t("modal.templates")}</h3>
+        <div className="preset-grid">
+          {OBJECT_PRESETS.map((p) => (
+            <button
+              key={p.type}
+              className={`preset-btn ${type === p.type ? "active" : ""}`}
+              onClick={() => applyType(p.type)}
+            >
+              <span className={ROUND_OBJECT_TYPES.includes(p.type) ? "preset-ico round" : "preset-ico rect"} />
+              <span className="preset-label">{t(objectLabelKey(p.type))}</span>
+            </button>
+          ))}
+        </div>
+
+        <h3>{t("modal.custom")}</h3>
+        <label className="field">
+          <span>{t("obj.label")}</span>
+          <input value={label} placeholder={t(objectLabelKey(type))} onChange={(e) => setLabel(e.target.value)} />
+        </label>
+        <div className="field-2col">
+          <label className="field">
+            <span>{t("left.width")}</span>
+            <input type="number" min={0.2} step={0.1} value={w} onChange={(e) => setW(Number(e.target.value))} />
+          </label>
+          <label className="field">
+            <span>{t("left.length")}</span>
+            <input type="number" min={0.2} step={0.1} value={h} onChange={(e) => setH(Number(e.target.value))} />
+          </label>
+        </div>
+        <label className="field">
+          <span>{t("modal.quantity")}</span>
+          <input type="number" min={1} max={50} value={count} onChange={(e) => setCount(Number(e.target.value))} />
+        </label>
+        <p className="muted">
+          {t(objectLabelKey(type))} · {w}×{h} {m} · ×{Math.max(1, count)}
+        </p>
+      </div>
+
+      <div className="float-foot">
+        <button className="btn" onClick={onClose}>{t("common.close")}</button>
+        <button className="btn primary" onClick={submit}>{t("common.add")}</button>
+      </div>
+    </div>
+  );
+}

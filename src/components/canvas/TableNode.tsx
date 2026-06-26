@@ -1,16 +1,19 @@
-import { Group, Rect, Ellipse, Circle, Text } from "react-konva";
+import { Group, Rect, Ellipse, Circle, Text, Path } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, TableModel } from "../../types";
 import { CHAIR_RADIUS } from "../../constants";
 import { computeChairs, isTight } from "../../geometry";
 import type { Palette } from "../../theme";
 import { useT } from "../../i18n";
+import { LOCK_BODY, LOCK_SHACKLE_CLOSED } from "../icons";
+
+const LOCK_ICON = 14;
 
 interface Props {
   table: TableModel;
   selected: boolean;
   tooClose: boolean;
-  locked: boolean;
+  panLocked: boolean;
   ppm: number;
   palette: Palette;
   projectChairStyle: ChairStyle;
@@ -28,7 +31,7 @@ export function TableNode({
   table,
   selected,
   tooClose,
-  locked,
+  panLocked,
   ppm,
   palette,
   projectChairStyle,
@@ -73,7 +76,7 @@ export function TableNode({
       x={table.x * ppm}
       y={table.y * ppm}
       rotation={table.rotation}
-      draggable={!locked}
+      draggable={!panLocked && !table.locked}
       dragBoundFunc={dragBound}
       onClick={handleSelect}
       onTap={handleSelect}
@@ -179,6 +182,25 @@ export function TableNode({
         fill={palette.labelText}
         listening={false}
       />
+
+      {table.locked && (
+        <Group
+          x={wpx / 2 - LOCK_ICON - 3}
+          y={-hpx / 2 + 3}
+          scaleX={LOCK_ICON / 16}
+          scaleY={LOCK_ICON / 16}
+          listening={false}
+        >
+          <Path data={LOCK_BODY} stroke={palette.labelText} strokeWidth={1.8} lineCap="round" lineJoin="round" />
+          <Path
+            data={LOCK_SHACKLE_CLOSED}
+            stroke={palette.labelText}
+            strokeWidth={1.8}
+            lineCap="round"
+            lineJoin="round"
+          />
+        </Group>
+      )}
     </Group>
   );
 }

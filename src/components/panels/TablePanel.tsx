@@ -1,5 +1,8 @@
 import { useStore } from "../../store";
 import { useT } from "../../i18n";
+import { ObjectsList } from "./ObjectsList";
+import { TablesList } from "./TablesList";
+import { LockIcon } from "../icons";
 import type { ChairStyle, Side, TableModel, TableShape } from "../../types";
 import { isTight, maxComfortableSeats, seatSpacing } from "../../geometry";
 
@@ -38,6 +41,14 @@ export function TablePanel() {
           <p>{t("table.noSelection")}</p>
           <p className="muted">{t("table.noSelectionHint")}</p>
         </div>
+        <section className="panel-section">
+          <h3>{t("table.listTitle")}</h3>
+          <TablesList />
+        </section>
+        <section className="panel-section">
+          <h3>{t("obj.listTitle")}</h3>
+          <ObjectsList />
+        </section>
       </div>
     );
   }
@@ -47,6 +58,7 @@ export function TablePanel() {
   }
 
   const table = selected[0];
+  const locked = table.locked;
   const tight = isTight(table, minSpacing);
   const spacing = seatSpacing(table);
   const maxSeats = maxComfortableSeats(table, minSpacing);
@@ -62,11 +74,20 @@ export function TablePanel() {
   return (
     <div className="panel">
       <section className="panel-section">
-        <h3>{`${t("table.word")} ${table.number}`}</h3>
+        <div className="panel-head-row">
+          <h3>{`${t("table.word")} ${table.number}`}</h3>
+          <button
+            className={`btn lock-btn ${locked ? "primary" : ""}`}
+            onClick={() => updateTable(table.id, { locked: !locked })}
+          >
+            <LockIcon size={14} open={locked} /> {locked ? t("table.unlock") : t("table.lock")}
+          </button>
+        </div>
         <label className="field">
           <span>{t("table.name")}</span>
           <input
             value={table.name}
+            disabled={locked}
             placeholder={`${t("table.word")} ${table.number}`}
             onChange={(e) => updateTable(table.id, { name: e.target.value })}
           />
@@ -75,6 +96,7 @@ export function TablePanel() {
           <span>{t("table.shape")}</span>
           <select
             value={table.shape}
+            disabled={locked}
             onChange={(e) => updateTable(table.id, { shape: e.target.value as TableShape })}
           >
             <option value="rect">{t("shape.rect")}</option>
@@ -88,6 +110,7 @@ export function TablePanel() {
               type="number"
               min={0.3}
               step={0.1}
+              disabled={locked}
               value={table.w}
               onChange={(e) => updateTable(table.id, { w: Math.max(0.3, Number(e.target.value)) })}
             />
@@ -98,6 +121,7 @@ export function TablePanel() {
               type="number"
               min={0.3}
               step={0.1}
+              disabled={locked}
               value={table.h}
               onChange={(e) => updateTable(table.id, { h: Math.max(0.3, Number(e.target.value)) })}
             />
@@ -108,6 +132,7 @@ export function TablePanel() {
           <input
             type="number"
             step={5}
+            disabled={locked}
             value={table.rotation}
             onChange={(e) => updateTable(table.id, { rotation: Number(e.target.value) % 360 })}
           />
@@ -117,9 +142,9 @@ export function TablePanel() {
       <section className="panel-section">
         <h3>{t("table.seats")}</h3>
         <div className="stepper">
-          <button onClick={() => updateTable(table.id, { seatCount: Math.max(0, table.seatCount - 1) })}>−</button>
+          <button disabled={locked} onClick={() => updateTable(table.id, { seatCount: Math.max(0, table.seatCount - 1) })}>−</button>
           <span className="stepper-val">{table.seatCount}</span>
-          <button onClick={() => updateTable(table.id, { seatCount: table.seatCount + 1 })}>+</button>
+          <button disabled={locked} onClick={() => updateTable(table.id, { seatCount: table.seatCount + 1 })}>+</button>
         </div>
         <p className={tight ? "warn" : "muted"}>
           {t("table.seatStep")}: {spacing.toFixed(2)} {m} · {t("table.comfortUpTo")} {maxSeats}{" "}
@@ -130,6 +155,7 @@ export function TablePanel() {
           <span>{t("table.chair")}</span>
           <select
             value={table.chairStyle ?? "inherit"}
+            disabled={locked}
             onChange={(e) =>
               updateTable(table.id, {
                 chairStyle: e.target.value === "inherit" ? null : (e.target.value as ChairStyle),
@@ -150,6 +176,7 @@ export function TablePanel() {
                 <label key={s.key} className="field-inline">
                   <input
                     type="checkbox"
+                    disabled={locked}
                     checked={!table.disabledSides.includes(s.key)}
                     onChange={(e) => toggleSide(s.key, e.target.checked)}
                   />
@@ -165,6 +192,7 @@ export function TablePanel() {
         <label className="field-inline">
           <input
             type="checkbox"
+            disabled={locked}
             checked={table.isPodium}
             onChange={(e) => updateTable(table.id, { isPodium: e.target.checked })}
           />
@@ -174,7 +202,7 @@ export function TablePanel() {
 
       <section className="panel-section row-actions">
         <button className="btn" onClick={() => duplicateTable(table.id)}>{t("common.duplicate")}</button>
-        <button className="btn danger" onClick={() => removeTable(table.id)}>{t("common.delete")}</button>
+        <button className="btn danger" disabled={locked} onClick={() => removeTable(table.id)}>{t("common.delete")}</button>
       </section>
     </div>
   );
@@ -310,6 +338,12 @@ export function TablePanel() {
 
         <section className="panel-section row-actions">
           <button className="btn" onClick={() => duplicateSelected()}>{t("common.duplicate")}</button>
+          <button className="btn icon-only" title={t("table.lock")} onClick={() => updateTables(ids, { locked: true })}>
+            <LockIcon size={15} />
+          </button>
+          <button className="btn icon-only" title={t("table.unlock")} onClick={() => updateTables(ids, { locked: false })}>
+            <LockIcon size={15} open />
+          </button>
           <button className="btn danger" onClick={() => deleteSelected()}>{t("common.delete")}</button>
         </section>
       </div>

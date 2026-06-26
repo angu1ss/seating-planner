@@ -1,4 +1,4 @@
-import type { ProjectState, TableShape } from "./types";
+import type { ProjectState, SceneObjectType, TableShape } from "./types";
 
 export const SCHEMA_VERSION = 1;
 
@@ -54,6 +54,31 @@ export function venuePresetLabel(v: VenuePreset, t: (k: string) => string): stri
   return `${t(v.sizeKey)} ${v.width}×${v.height}`;
 }
 
+export interface ObjectPreset {
+  type: SceneObjectType;
+  w: number;
+  h: number;
+}
+
+export const OBJECT_PRESETS: ObjectPreset[] = [
+  { type: "stage", w: 4, h: 1.5 },
+  { type: "screen", w: 3, h: 0.25 },
+  { type: "stageScreen", w: 4, h: 1.8 },
+  { type: "dancefloor", w: 4, h: 4 },
+  { type: "bar", w: 3, h: 0.8 },
+  { type: "entrance", w: 0.9, h: 0.9 },
+  { type: "giftTable", w: 1.2, h: 0.6 },
+  { type: "columnRound", w: 0.4, h: 0.4 },
+  { type: "columnSquare", w: 0.4, h: 0.4 },
+];
+
+/** Object types rendered as an ellipse rather than a rectangle. */
+export const ROUND_OBJECT_TYPES: SceneObjectType[] = ["columnRound"];
+
+export function objectLabelKey(type: SceneObjectType): string {
+  return `obj.${type}`;
+}
+
 export function createInitialState(): ProjectState {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -77,5 +102,6 @@ export function createInitialState(): ProjectState {
       theme: "light",
     },
     tables: [],
+    objects: [],
   };
 }

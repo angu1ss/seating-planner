@@ -6,9 +6,10 @@ import { clampTableCenter, tableOuterExtent, tablesThatDontFit } from "../../geo
 
 interface Props {
   onAddTable: () => void;
+  onAddObject: () => void;
 }
 
-export function LeftPanel({ onAddTable }: Props) {
+export function LeftPanel({ onAddTable, onAddObject }: Props) {
   const t = useT();
   const venue = useStore((s) => s.venue);
   const setVenue = useStore((s) => s.setVenue);
@@ -51,8 +52,9 @@ export function LeftPanel({ onAddTable }: Props) {
 
   return (
     <div className="panel">
-      <section className="panel-section">
+      <section className="panel-section add-buttons">
         <button className="btn primary block" onClick={onAddTable}>＋ {t("left.addTable")}</button>
+        <button className="btn block" onClick={onAddObject}>＋ {t("obj.add")}</button>
       </section>
 
       <section className="panel-section">

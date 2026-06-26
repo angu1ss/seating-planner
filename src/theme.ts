@@ -16,6 +16,9 @@ export interface Palette {
   chairFill: string;
   chairStroke: string;
   labelText: string;
+  objectFill: string;
+  objectStroke: string;
+  objectText: string;
 }
 
 const light: Palette = {
@@ -34,6 +37,9 @@ const light: Palette = {
   chairFill: "#f4f6f9",
   chairStroke: "#8a97a5",
   labelText: "#26303a",
+  objectFill: "#dfe6ee",
+  objectStroke: "#94a3b4",
+  objectText: "#475569",
 };
 
 const dark: Palette = {
@@ -52,6 +58,9 @@ const dark: Palette = {
   chairFill: "#222c36",
   chairStroke: "#566472",
   labelText: "#e6edf3",
+  objectFill: "#243040",
+  objectStroke: "#475569",
+  objectText: "#aab8c6",
 };
 
 export function getPalette(theme: Theme): Palette {
