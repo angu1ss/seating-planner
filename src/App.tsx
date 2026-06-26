@@ -6,6 +6,7 @@ import { TablePanel } from "./components/panels/TablePanel";
 import { ObjectPanel } from "./components/panels/ObjectPanel";
 import { AddTableModal } from "./components/panels/AddTableModal";
 import { AddObjectModal } from "./components/panels/AddObjectModal";
+import { ShortcutsModal } from "./components/panels/ShortcutsModal";
 import { FloorCanvas } from "./components/canvas/FloorCanvas";
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
   const [rightOpen, setRightOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addObjOpen, setAddObjOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -22,7 +24,11 @@ export default function App() {
 
   return (
     <div className="app">
-      <Toolbar onToggleLeft={() => setLeftOpen((v) => !v)} onToggleRight={() => setRightOpen((v) => !v)} />
+      <Toolbar
+        onToggleLeft={() => setLeftOpen((v) => !v)}
+        onToggleRight={() => setRightOpen((v) => !v)}
+        onHelp={() => setHelpOpen(true)}
+      />
       <div className="body">
         <aside className={`side left ${leftOpen ? "open" : ""}`}>
           <LeftPanel
@@ -54,6 +60,7 @@ export default function App() {
       </div>
       {addOpen && <AddTableModal onClose={() => setAddOpen(false)} />}
       {addObjOpen && <AddObjectModal onClose={() => setAddObjOpen(false)} />}
+      {helpOpen && <ShortcutsModal onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

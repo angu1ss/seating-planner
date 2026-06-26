@@ -1,5 +1,16 @@
 import { create } from "zustand";
+import { useStore as useZustand } from "zustand";
 import { persist } from "zustand/middleware";
+import { temporal } from "zundo";
+
+// Collapse rapid changes (drag, typing) into a single history entry.
+function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout>;
+  return ((...args: never[]) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  }) as T;
+}
 import type {
   ChairStyle,
   ProjectMeta,
@@ -115,13 +126,16 @@ export interface EditorState extends ProjectState {
 
   select: (id: string, additive?: boolean) => void;
   selectMany: (ids: string[]) => void;
+  selectAllTables: () => void;
   clearSelection: () => void;
+  rotateSelection: (deg: number) => void;
+  toggleLockSelection: () => void;
 
   copySelected: () => void;
   pasteClipboard: (at?: { x: number; y: number }) => void;
   duplicateSelected: () => void;
   deleteSelected: () => void;
-  nudgeSelected: (dx: number, dy: number) => void;
+  nudgeSelected: (dx: number, dy: number, big?: boolean) => void;
 
   loadDocument: (doc: ProjectState) => void;
   resetProject: () => void;
@@ -129,6 +143,7 @@ export interface EditorState extends ProjectState {
 }
 
 export const useStore = create<EditorState>()(
+  temporal(
   persist(
     (set, get) => ({
       ...createInitialState(),
@@ -322,7 +337,48 @@ export const useStore = create<EditorState>()(
           };
         }),
       selectMany: (ids) => set({ selectedIds: ids, selectedObjectId: null }),
+      selectAllTables: () => set((s) => ({ selectedIds: s.tables.map((t) => t.id), selectedObjectId: null })),
       clearSelection: () => set({ selectedIds: [], selectedObjectId: null }),
+
+      rotateSelection: (deg) =>
+        set((s) => {
+          if (s.selectedObjectId) {
+            return {
+              objects: s.objects.map((o) =>
+                o.id === s.selectedObjectId && !o.locked
+                  ? { ...o, rotation: (o.rotation + deg + 360) % 360 }
+                  : o,
+              ),
+            };
+          }
+          return {
+            tables: s.tables.map((t) =>
+              s.selectedIds.includes(t.id) && !t.locked
+                ? { ...t, rotation: (t.rotation + deg + 360) % 360 }
+                : t,
+            ),
+          };
+        }),
+
+      toggleLockSelection: () =>
+        set((s) => {
+          if (s.selectedObjectId) {
+            return {
+              objects: s.objects.map((o) =>
+                o.id === s.selectedObjectId ? { ...o, locked: !o.locked } : o,
+              ),
+            };
+          }
+          if (!s.selectedIds.length) return {};
+          const allLocked = s.tables
+            .filter((t) => s.selectedIds.includes(t.id))
+            .every((t) => t.locked);
+          return {
+            tables: s.tables.map((t) =>
+              s.selectedIds.includes(t.id) ? { ...t, locked: !allLocked } : t,
+            ),
+          };
+        }),
 
       copySelected: () =>
         set((s) => {
@@ -398,10 +454,23 @@ export const useStore = create<EditorState>()(
           };
         }),
 
-      nudgeSelected: (dx, dy) =>
+      nudgeSelected: (dx, dy, big = false) =>
         set((s) => {
+          const step = big ? s.venue.gridStep || 0.5 : s.venue.snapStep || 0.1;
+          if (s.selectedObjectId) {
+            return {
+              objects: s.objects.map((o) =>
+                o.id === s.selectedObjectId && !o.locked
+                  ? {
+                      ...o,
+                      x: clampAxis(o.x + dx * step, o.w, s.venue.width),
+                      y: clampAxis(o.y + dy * step, o.h, s.venue.height),
+                    }
+                  : o,
+              ),
+            };
+          }
           if (!s.selectedIds.length) return {};
-          const step = s.venue.snapToGrid ? s.venue.gridStep || 0.5 : s.venue.snapStep || 0.1;
           return {
             tables: s.tables.map((t) =>
               s.selectedIds.includes(t.id) && !t.locked
@@ -458,4 +527,25 @@ export const useStore = create<EditorState>()(
       }),
     },
   ),
+  {
+    partialize: (state) => ({
+      schemaVersion: state.schemaVersion,
+      project: state.project,
+      venue: state.venue,
+      settings: state.settings,
+      tables: state.tables,
+      objects: state.objects,
+    }),
+    limit: 100,
+    handleSet: (handleSet) => debounce(handleSet, 250),
+  },
+  ),
 );
+
+// Start with a clean history (ignore the initial hydration).
+useStore.temporal.getState().clear();
+
+export const undo = () => useStore.temporal.getState().undo();
+export const redo = () => useStore.temporal.getState().redo();
+export const useCanUndo = () => useZustand(useStore.temporal, (s) => s.pastStates.length > 0);
+export const useCanRedo = () => useZustand(useStore.temporal, (s) => s.futureStates.length > 0);

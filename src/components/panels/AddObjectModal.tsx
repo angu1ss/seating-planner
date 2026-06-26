@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useStore } from "../../store";
 import { useT } from "../../i18n";
-import { OBJECT_PRESETS, ROUND_OBJECT_TYPES, objectLabelKey } from "../../constants";
+import { OBJECT_PRESETS, objectLabelKey } from "../../constants";
 import type { SceneObjectType } from "../../types";
+import { Icon } from "../Icon";
+import { OBJECT_ICONS } from "../../iconmap";
 
 interface Props {
   onClose: () => void;
@@ -44,6 +46,13 @@ export function AddObjectModal({ onClose }: Props) {
     },
     [onPointerMove, onPointerUp],
   );
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const applyType = (tp: SceneObjectType) => {
     const p = OBJECT_PRESETS.find((x) => x.type === tp);
@@ -66,7 +75,7 @@ export function AddObjectModal({ onClose }: Props) {
     <div className="float-panel" style={{ left: panelPos.x, top: panelPos.y }} role="dialog" aria-label={t("obj.add")}>
       <div className="float-head" onPointerDown={onHeaderDown}>
         <h2>{t("obj.add")}</h2>
-        <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}>✕</button>
+        <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}><Icon name="close" /></button>
       </div>
 
       <div className="float-body">
@@ -78,7 +87,7 @@ export function AddObjectModal({ onClose }: Props) {
               className={`preset-btn ${type === p.type ? "active" : ""}`}
               onClick={() => applyType(p.type)}
             >
-              <span className={ROUND_OBJECT_TYPES.includes(p.type) ? "preset-ico round" : "preset-ico rect"} />
+              <Icon icon={OBJECT_ICONS[p.type]} size={22} />
               <span className="preset-label">{t(objectLabelKey(p.type))}</span>
             </button>
           ))}
@@ -110,7 +119,7 @@ export function AddObjectModal({ onClose }: Props) {
 
       <div className="float-foot">
         <button className="btn" onClick={onClose}>{t("common.close")}</button>
-        <button className="btn primary" onClick={submit}>{t("common.add")}</button>
+        <button className="btn primary" onClick={submit}><Icon name="add" /> {t("common.add")}</button>
       </div>
     </div>
   );

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useStore } from "../../store";
 import { useT } from "../../i18n";
 import { objectLabelKey } from "../../constants";
-import { LockIcon } from "../icons";
+import { Icon } from "../Icon";
+import { OBJECT_ICONS } from "../../iconmap";
 
 export function ObjectsList() {
   const t = useT();
@@ -25,12 +26,13 @@ export function ObjectsList() {
         {objects.map((o) => (
           <div key={o.id} className={`obj-list-item ${checked.includes(o.id) ? "checked" : ""}`}>
             <input type="checkbox" checked={checked.includes(o.id)} onChange={() => toggle(o.id)} />
+            <Icon icon={OBJECT_ICONS[o.type]} />
             <button className="obj-list-label" onClick={() => selectObject(o.id)}>
               {o.label.trim() || t(objectLabelKey(o.type))}
             </button>
             {o.locked && (
               <span className="lock-ico" title={t("obj.locked")}>
-                <LockIcon size={14} />
+                <Icon name="lock" />
               </span>
             )}
           </div>
@@ -39,12 +41,14 @@ export function ObjectsList() {
 
       {checked.length > 0 && (
         <div className="obj-list-actions">
-          <button className="btn" onClick={() => duplicateObjects(checked)}>{t("common.duplicate")}</button>
+          <button className="btn" onClick={() => duplicateObjects(checked)}>
+            <Icon name="duplicate" /> {t("common.duplicate")}
+          </button>
           <button className="btn icon-only" title={t("obj.lock")} onClick={() => updateObjects(checked, { locked: true })}>
-            <LockIcon size={15} />
+            <Icon name="lock" />
           </button>
           <button className="btn icon-only" title={t("obj.unlock")} onClick={() => updateObjects(checked, { locked: false })}>
-            <LockIcon size={15} open />
+            <Icon name="unlock" />
           </button>
           <button
             className="btn danger"
@@ -53,7 +57,7 @@ export function ObjectsList() {
               clear();
             }}
           >
-            {t("common.delete")}
+            <Icon name="delete" /> {t("common.delete")}
           </button>
         </div>
       )}

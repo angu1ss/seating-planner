@@ -4,6 +4,7 @@ import { useStore } from "../../store";
 import { useT } from "../../i18n";
 import { TABLE_PRESETS, presetLabel } from "../../constants";
 import type { ChairStyle, TableShape } from "../../types";
+import { Icon } from "../Icon";
 
 interface Props {
   onClose: () => void;
@@ -48,6 +49,13 @@ export function AddTableModal({ onClose }: Props) {
     },
     [onPointerMove, onPointerUp],
   );
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const applyPreset = (id: string) => {
     const p = TABLE_PRESETS.find((x) => x.id === id);
@@ -80,7 +88,7 @@ export function AddTableModal({ onClose }: Props) {
     <div className="float-panel" style={{ left: panelPos.x, top: panelPos.y }} role="dialog" aria-label={t("modal.title")}>
       <div className="float-head" onPointerDown={onHeaderDown}>
         <h2>{t("modal.title")}</h2>
-        <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}>✕</button>
+        <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}><Icon name="close" /></button>
       </div>
 
       <div className="float-body">
@@ -145,7 +153,7 @@ export function AddTableModal({ onClose }: Props) {
 
       <div className="float-foot">
         <button className="btn" onClick={onClose}>{t("common.close")}</button>
-        <button className="btn primary" onClick={submit}>{t("common.add")}</button>
+        <button className="btn primary" onClick={submit}><Icon name="add" /> {t("common.add")}</button>
       </div>
     </div>
   );

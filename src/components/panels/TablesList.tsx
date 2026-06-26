@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../../store";
 import { useT } from "../../i18n";
-import { LockIcon } from "../icons";
+import { Icon } from "../Icon";
 
 export function TablesList() {
   const t = useT();
@@ -29,7 +29,7 @@ export function TablesList() {
             </button>
             {tb.locked && (
               <span className="lock-ico" title={t("table.lock")}>
-                <LockIcon size={14} />
+                <Icon name="lock" />
               </span>
             )}
           </div>
@@ -38,12 +38,14 @@ export function TablesList() {
 
       {checked.length > 0 && (
         <div className="obj-list-actions">
-          <button className="btn" onClick={() => duplicateTables(checked)}>{t("common.duplicate")}</button>
+          <button className="btn" onClick={() => duplicateTables(checked)}>
+            <Icon name="duplicate" /> {t("common.duplicate")}
+          </button>
           <button className="btn icon-only" title={t("table.lock")} onClick={() => updateTables(checked, { locked: true })}>
-            <LockIcon size={15} />
+            <Icon name="lock" />
           </button>
           <button className="btn icon-only" title={t("table.unlock")} onClick={() => updateTables(checked, { locked: false })}>
-            <LockIcon size={15} open />
+            <Icon name="unlock" />
           </button>
           <button
             className="btn danger"
@@ -52,7 +54,7 @@ export function TablesList() {
               clear();
             }}
           >
-            {t("common.delete")}
+            <Icon name="delete" /> {t("common.delete")}
           </button>
         </div>
       )}

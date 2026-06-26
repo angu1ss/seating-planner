@@ -1,15 +1,17 @@
 import { useRef } from "react";
-import { useStore } from "../../store";
+import { useStore, undo, redo, useCanUndo, useCanRedo } from "../../store";
 import { useI18n, useT, type Lang } from "../../i18n";
 import { downloadJSON, readJSONFile, slugify } from "../../utils/file";
 import { FLAGS, supportsFlagEmoji } from "../../utils/emoji";
+import { Icon } from "../Icon";
 
 interface Props {
   onToggleLeft: () => void;
   onToggleRight: () => void;
+  onHelp: () => void;
 }
 
-export function Toolbar({ onToggleLeft, onToggleRight }: Props) {
+export function Toolbar({ onToggleLeft, onToggleRight, onHelp }: Props) {
   const t = useT();
   const lang = useI18n((s) => s.lang);
   const setLang = useI18n((s) => s.setLang);
@@ -25,6 +27,8 @@ export function Toolbar({ onToggleLeft, onToggleRight }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const flags = supportsFlagEmoji();
   const langs: Lang[] = ["en", "ru"];
+  const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
 
   const handleExport = () => downloadJSON(getDocument(), `${slugify(project.name)}.json`);
 
@@ -69,21 +73,34 @@ export function Toolbar({ onToggleLeft, onToggleRight }: Props) {
             </button>
           ))}
         </div>
+        <button className="icon-btn" onClick={undo} disabled={!canUndo} title={t("common.undo")} aria-label={t("common.undo")}>
+          <Icon name="undo" />
+        </button>
+        <button className="icon-btn" onClick={redo} disabled={!canRedo} title={t("common.redo")} aria-label={t("common.redo")}>
+          <Icon name="redo" />
+        </button>
+        <button className="icon-btn" onClick={onHelp} title={t("help.title")} aria-label={t("help.title")}>
+          <Icon name="help" />
+        </button>
         <button
           className="btn"
           onClick={() => setSettings({ theme: theme === "dark" ? "light" : "dark" })}
         >
-          {theme === "dark" ? `☀️ ${t("common.theme.light")}` : `🌙 ${t("common.theme.dark")}`}
+          <Icon name={theme === "dark" ? "light" : "dark"} /> {theme === "dark" ? t("common.theme.light") : t("common.theme.dark")}
         </button>
-        <button className="btn" onClick={() => fileRef.current?.click()}>{t("common.open")}</button>
-        <button className="btn" onClick={handleExport}>{t("common.save")}</button>
+        <button className="btn" onClick={() => fileRef.current?.click()}>
+          <Icon name="import" /> {t("common.open")}
+        </button>
+        <button className="btn" onClick={handleExport}>
+          <Icon name="export" /> {t("common.save")}
+        </button>
         <button
           className="btn danger"
           onClick={() => {
             if (confirm(t("common.confirmReset"))) resetProject();
           }}
         >
-          {t("common.reset")}
+          <Icon name="reset" /> {t("common.reset")}
         </button>
         <button className="icon-btn only-mobile" onClick={onToggleRight} aria-label="properties">⚙</button>
         <input

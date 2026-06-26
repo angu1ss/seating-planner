@@ -12,6 +12,8 @@ const en: Dict = {
   "common.reset": "Reset",
   "common.cancel": "Cancel",
   "common.close": "Close",
+  "common.undo": "Undo",
+  "common.redo": "Redo",
   "project.untitled": "Untitled project",
   "common.add": "Add",
   "common.delete": "Delete",
@@ -107,6 +109,19 @@ const en: Dict = {
 
   "unit.m": "m",
   "lang.label": "Language",
+
+  "help.title": "Keyboard shortcuts",
+  "help.deselect": "Deselect / close dialog",
+  "help.selectAll": "Select all tables / deselect",
+  "help.copyPaste": "Copy / paste (at cursor)",
+  "help.duplicate": "Duplicate",
+  "help.export": "Export project",
+  "help.delete": "Delete selection",
+  "help.move": "Move (Shift = larger step)",
+  "help.rotate": "Rotate ±15° (Shift = ±90°)",
+  "help.lock": "Lock / unlock selection",
+  "help.zoom": "Zoom; 0 = fit to screen",
+  "help.pan": "Pan the canvas",
 };
 
 const ru: Dict = {
@@ -116,6 +131,8 @@ const ru: Dict = {
   "common.reset": "Сброс",
   "common.cancel": "Отмена",
   "common.close": "Закрыть",
+  "common.undo": "Отменить",
+  "common.redo": "Повторить",
   "project.untitled": "Новый проект",
   "common.add": "Добавить",
   "common.delete": "Удалить",
@@ -211,6 +228,19 @@ const ru: Dict = {
 
   "unit.m": "м",
   "lang.label": "Язык",
+
+  "help.title": "Горячие клавиши",
+  "help.deselect": "Снять выделение / закрыть окно",
+  "help.selectAll": "Выделить все столы / снять выделение",
+  "help.copyPaste": "Копировать / вставить (по курсору)",
+  "help.duplicate": "Дублировать",
+  "help.export": "Экспорт проекта",
+  "help.delete": "Удалить выбранное",
+  "help.move": "Переместить (Shift — крупный шаг)",
+  "help.rotate": "Поворот ±15° (Shift — ±90°)",
+  "help.lock": "Заблокировать / разблокировать",
+  "help.zoom": "Зум; 0 — вписать в экран",
+  "help.pan": "Панорамирование холста",
 };
 
 const messages: Record<Lang, Dict> = { en, ru };

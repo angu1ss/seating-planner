@@ -1,62 +1,49 @@
 # Seating Planner
 
-Веб-приложение для расстановки столов и рассадки гостей на мероприятиях (свадьбы, банкеты, конференции). Работает целиком в браузере, без бэкенда: автосейв в `localStorage` + экспорт/импорт проекта в `.json`.
+A browser app for arranging tables and seating guests at events (weddings, banquets, conferences). Everything runs client‑side: autosave to `localStorage` plus project export/import as `.json`. EN/RU localization, light/dark theme, responsive for desktop, tablet and phone.
 
-## Текущий статус — вертикальный срез (этапы 1–2)
+Stack: React + TypeScript + Vite, Konva (react‑konva) for the canvas, Zustand for state, Font Awesome Pro for icons.
 
-- Прямоугольный зал с размерами в метрах, сетка и привязка.
-- Холст с зумом (колесо / кнопки) и панорамированием (перетаскивание пустого холста).
-- Столы: пресеты и произвольные размеры, формы «прямоугольный» и «эллипс/круг».
-- Перетаскивание, поворот, дублирование, удаление столов.
-- Счётчик мест с авто-расстановкой стульев по периметру; стиль стула (круглый/квадратный) глобально и с переопределением на стол.
-- Отключение сторон у прямоугольного стола; флаг «подиум».
-- Предупреждение о тесной посадке (мин. расстояние на гостя).
-- Светлая/тёмная тема. Адаптив: десктоп, планшет, смартфон (панели-шторки).
+[Русская версия README](./README.ru.md)
 
-Дальше по дорожной карте: объекты сцены, гости и рассадка, шаблоны, экспорт в PDF/PNG и карточки. См. спецификацию MVP.
+## Keyboard shortcuts
 
-## Стек
+| Keys                                | Action                       |
+|-------------------------------------|------------------------------|
+| `Esc`                               | Deselect / close dialog      |
+| `Ctrl/⌘ + A` / `Ctrl/⌘ + Shift + A` | Select all tables / deselect |
+| `Ctrl/⌘ + C` / `Ctrl/⌘ + V`         | Copy / paste (at cursor)     |
+| `Ctrl/⌘ + D`                        | Duplicate                    |
+| `Ctrl/⌘ + S`                        | Export project to `.json`    |
+| `Delete` / `Backspace`              | Delete selection             |
+| Arrows / `Shift` + arrows           | Move by a small / large step |
+| `[` / `]` (with `Shift` — ±90°)     | Rotate selection by ±15°     |
+| `L`                                 | Lock / unlock selection      |
+| `+` / `−` / `PageUp` / `PageDown`   | Zoom; `0` — fit to screen    |
+| Space + drag                        | Pan the canvas               |
 
-React + TypeScript + Vite, Konva (react-konva) для холста, Zustand для состояния.
+The same list is available in the editor via the help button (top‑right).
 
-## Запуск через Docker (без локального Node/npm)
+## Font Awesome Pro token
 
-Нужен только Docker (Docker Desktop).
+Icons use Font Awesome Pro, installed from a private registry, so a token is required **at install time**.
+
+- **Local:** copy `.env.example` to `.env` and set `FONTAWESOME_NPM_AUTH_TOKEN` (from your Font Awesome account → *npm tokens*). Docker Compose reads `.env` automatically.
+- **CI (GitHub Actions):** add a repository secret named `FONTAWESOME_NPM_AUTH_TOKEN`.
+
+## Run with Docker (no local Node/npm)
 
 ```bash
-# Dev-сервер с hot reload
-docker compose up --build
-# открыть http://localhost:5173
+docker compose up --build      # http://localhost:5173
 ```
 
-Остановить: `docker compose down`. После изменения зависимостей в `package.json`
-пересоберите образ (`docker compose up --build`).
+Stop with `docker compose down`. Rebuild the image after changing dependencies (`docker compose up --build`).
 
-Посмотреть прод-сборку локально (опционально):
-
-```bash
-docker compose run --rm --service-ports dev sh -c "npm run build && npm run preview"
-# открыть http://localhost:4173
-```
-
-## Запуск через npm (если Node установлен локально)
+## Run with npm
 
 ```bash
 npm install
-npm run dev      # дев-сервер
-npm run build    # сборка (tsc + vite)
-npm run preview  # предпросмотр сборки
+npm run dev       # dev server
+npm run build     # production build
+npm run preview   # preview the build
 ```
-
-## Деплой на GitHub Pages
-
-Прод публикуется автоматически через GitHub Actions (`.github/workflows/deploy.yml`):
-при push в `main` workflow собирает проект и деплоит `dist/` на Pages. Docker в
-деплое не участвует.
-
-Однократно включите Pages в репозитории: **Settings → Pages → Build and deployment
-→ Source: GitHub Actions**. После этого сайт будет доступен по адресу вида
-`https://angu1ss.github.io/seating-planner/`.
-
-`base: "./"` в `vite.config.ts` обеспечивает корректные пути к ассетам в подпапке
-проекта на Pages.

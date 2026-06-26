@@ -3,6 +3,8 @@ services:
     build:
       context: .
       target: dev
+      args:
+        FONTAWESOME_NPM_AUTH_TOKEN: ${FONTAWESOME_NPM_AUTH_TOKEN:-}
     container_name: seating-planner
     ports:
       - "5173:5173"

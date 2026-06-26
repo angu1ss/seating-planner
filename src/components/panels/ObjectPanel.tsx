@@ -1,7 +1,7 @@
 import { useStore } from "../../store";
 import { useT } from "../../i18n";
 import { objectLabelKey } from "../../constants";
-import { LockIcon } from "../icons";
+import { Icon } from "../Icon";
 
 export function ObjectPanel() {
   const t = useT();
@@ -21,12 +21,12 @@ export function ObjectPanel() {
             className={`btn lock-btn ${locked ? "primary" : ""}`}
             onClick={() => updateObject(obj.id, { locked: !locked })}
           >
-            <LockIcon size={14} open={locked} /> {locked ? t("obj.unlock") : t("obj.lock")}
+            <Icon name={locked ? "unlock" : "lock"} /> {locked ? t("obj.unlock") : t("obj.lock")}
           </button>
         </div>
         {locked && (
           <p className="muted lock-row">
-            <LockIcon size={14} /> {t("obj.locked")}
+            <Icon name="lock" /> {t("obj.locked")}
           </p>
         )}
 
@@ -81,7 +81,7 @@ export function ObjectPanel() {
 
       <section className="panel-section row-actions">
         <button className="btn danger" disabled={locked} onClick={() => removeObject(obj.id)}>
-          {t("common.delete")}
+          <Icon name="delete" /> {t("common.delete")}
         </button>
       </section>
     </div>

@@ -2,7 +2,7 @@ import { useStore } from "../../store";
 import { useT } from "../../i18n";
 import { ObjectsList } from "./ObjectsList";
 import { TablesList } from "./TablesList";
-import { LockIcon } from "../icons";
+import { Icon } from "../Icon";
 import type { ChairStyle, Side, TableModel, TableShape } from "../../types";
 import { isTight, maxComfortableSeats, seatSpacing } from "../../geometry";
 
@@ -80,7 +80,7 @@ export function TablePanel() {
             className={`btn lock-btn ${locked ? "primary" : ""}`}
             onClick={() => updateTable(table.id, { locked: !locked })}
           >
-            <LockIcon size={14} open={locked} /> {locked ? t("table.unlock") : t("table.lock")}
+            <Icon name={locked ? "unlock" : "lock"} /> {locked ? t("table.unlock") : t("table.lock")}
           </button>
         </div>
         <label className="field">
@@ -201,8 +201,8 @@ export function TablePanel() {
       </section>
 
       <section className="panel-section row-actions">
-        <button className="btn" onClick={() => duplicateTable(table.id)}>{t("common.duplicate")}</button>
-        <button className="btn danger" disabled={locked} onClick={() => removeTable(table.id)}>{t("common.delete")}</button>
+        <button className="btn" onClick={() => duplicateTable(table.id)}><Icon name="duplicate" /> {t("common.duplicate")}</button>
+        <button className="btn danger" disabled={locked} onClick={() => removeTable(table.id)}><Icon name="delete" /> {t("common.delete")}</button>
       </section>
     </div>
   );
@@ -337,14 +337,14 @@ export function TablePanel() {
         </section>
 
         <section className="panel-section row-actions">
-          <button className="btn" onClick={() => duplicateSelected()}>{t("common.duplicate")}</button>
+          <button className="btn" onClick={() => duplicateSelected()}><Icon name="duplicate" /> {t("common.duplicate")}</button>
           <button className="btn icon-only" title={t("table.lock")} onClick={() => updateTables(ids, { locked: true })}>
-            <LockIcon size={15} />
+            <Icon name="lock" />
           </button>
           <button className="btn icon-only" title={t("table.unlock")} onClick={() => updateTables(ids, { locked: false })}>
-            <LockIcon size={15} open />
+            <Icon name="unlock" />
           </button>
-          <button className="btn danger" onClick={() => deleteSelected()}>{t("common.delete")}</button>
+          <button className="btn danger" onClick={() => deleteSelected()}><Icon name="delete" /> {t("common.delete")}</button>
         </section>
       </div>
     );

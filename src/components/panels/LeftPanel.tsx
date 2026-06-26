@@ -3,6 +3,7 @@ import { useStore } from "../../store";
 import { useT } from "../../i18n";
 import { VENUE_PRESETS, venuePresetLabel } from "../../constants";
 import { clampTableCenter, tableOuterExtent, tablesThatDontFit } from "../../geometry";
+import { Icon } from "../Icon";
 
 interface Props {
   onAddTable: () => void;
@@ -53,8 +54,8 @@ export function LeftPanel({ onAddTable, onAddObject }: Props) {
   return (
     <div className="panel">
       <section className="panel-section add-buttons">
-        <button className="btn primary block" onClick={onAddTable}>＋ {t("left.addTable")}</button>
-        <button className="btn block" onClick={onAddObject}>＋ {t("obj.add")}</button>
+        <button className="btn primary block" onClick={onAddTable}><Icon name="add" /> {t("left.addTable")}</button>
+        <button className="btn block" onClick={onAddObject}><Icon name="add" /> {t("obj.add")}</button>
       </section>
 
       <section className="panel-section">

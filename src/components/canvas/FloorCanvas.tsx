@@ -2,11 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Stage, Layer, Rect, Line } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { TableModel } from "../../types";
-import { useStore } from "../../store";
+import { useStore, undo, redo } from "../../store";
 import { getPalette } from "../../theme";
 import { useT } from "../../i18n";
 import { clampTableCenter, findFreeSpot, tableOuterExtent, tablesOverlap, tooCloseTables } from "../../geometry";
 import { objectLabelKey } from "../../constants";
+import { downloadJSON, slugify } from "../../utils/file";
+import { Icon } from "../Icon";
 import { TableNode } from "./TableNode";
 import { ObjectNode } from "./ObjectNode";
 
@@ -23,8 +25,16 @@ interface KbActions {
   pasteClipboard: () => void;
   duplicateSelected: () => void;
   deleteSelected: () => void;
-  nudgeSelected: (dx: number, dy: number) => void;
+  nudgeSelected: (dx: number, dy: number, big?: boolean) => void;
   zoomBy: (factor: number) => void;
+  selectAll: () => void;
+  clearSel: () => void;
+  rotate: (deg: number) => void;
+  toggleLock: () => void;
+  fit: () => void;
+  exportDoc: () => void;
+  undo: () => void;
+  redo: () => void;
 }
 
 interface Marquee {
@@ -84,6 +94,11 @@ export function FloorCanvas() {
   const duplicateSelected = useStore((s) => s.duplicateSelected);
   const deleteSelected = useStore((s) => s.deleteSelected);
   const nudgeSelected = useStore((s) => s.nudgeSelected);
+  const selectAllTables = useStore((s) => s.selectAllTables);
+  const rotateSelection = useStore((s) => s.rotateSelection);
+  const toggleLockSelection = useStore((s) => s.toggleLockSelection);
+  const getDocument = useStore((s) => s.getDocument);
+  const projectName = useStore((s) => s.project.name);
 
   const palette = getPalette(settings.theme);
   const panMode = spaceDown || coarse;
@@ -140,6 +155,10 @@ export function FloorCanvas() {
 
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
+    if (e.evt.altKey) {
+      rotateSelection(e.evt.deltaY > 0 ? 15 : -15);
+      return;
+    }
     const stage = e.target.getStage();
     const pointer = stage?.getPointerPosition();
     if (!pointer) return;
@@ -313,6 +332,23 @@ export function FloorCanvas() {
     updateObject(id, { x: clampAxis(snapV(x), obj.w, venue.width), y: clampAxis(snapV(y), obj.h, venue.height) });
   };
 
+  const handleObjectTransform = (
+    id: string,
+    patch: { w?: number; h?: number; x?: number; y?: number; rotation?: number },
+  ) => {
+    const obj = objects.find((o) => o.id === id);
+    if (!obj) return;
+    const w = patch.w ?? obj.w;
+    const h = patch.h ?? obj.h;
+    updateObject(id, {
+      w: Number(w.toFixed(2)),
+      h: Number(h.toFixed(2)),
+      x: clampAxis(patch.x ?? obj.x, w, venue.width),
+      y: clampAxis(patch.y ?? obj.y, h, venue.height),
+      rotation: Math.round(patch.rotation ?? obj.rotation),
+    });
+  };
+
   const makeObjectDragBound =
     (obj: { w: number; h: number }) => (absPos: { x: number; y: number }) => {
       const minX = obj.w / 2;
@@ -346,58 +382,96 @@ export function FloorCanvas() {
   }, []);
 
   // Other shortcuts (bound once, kept fresh via ref).
-  const kb = useRef<KbActions>({
+  const buildKb = (): KbActions => ({
     copySelected,
     pasteClipboard: () => pasteClipboard(lastPointer.current ?? undefined),
     duplicateSelected,
     deleteSelected,
     nudgeSelected,
     zoomBy,
+    selectAll: selectAllTables,
+    clearSel: clearSelection,
+    rotate: rotateSelection,
+    toggleLock: toggleLockSelection,
+    fit,
+    exportDoc: () => downloadJSON(getDocument(), `${slugify(projectName)}.json`),
+    undo,
+    redo,
   });
-  kb.current = {
-    copySelected,
-    pasteClipboard: () => pasteClipboard(lastPointer.current ?? undefined),
-    duplicateSelected,
-    deleteSelected,
-    nudgeSelected,
-    zoomBy,
-  };
+  const kb = useRef<KbActions>(buildKb());
+  kb.current = buildKb();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
-      const meta = e.metaKey || e.ctrlKey;
       const a = kb.current;
       const k = e.key.toLowerCase();
-      if (meta && k === "c") {
-        a.copySelected();
-        e.preventDefault();
-      } else if (meta && k === "v") {
-        a.pasteClipboard();
-        e.preventDefault();
-      } else if (meta && k === "d") {
-        a.duplicateSelected();
-        e.preventDefault();
-      } else if (e.key === "Delete" || e.key === "Backspace") {
+      const meta = e.metaKey || e.ctrlKey;
+
+      if (e.key === "Escape") {
+        a.clearSel();
+        return;
+      }
+      if (meta) {
+        if (k === "a") {
+          if (e.shiftKey) a.clearSel();
+          else a.selectAll();
+          e.preventDefault();
+        } else if (k === "s") {
+          a.exportDoc();
+          e.preventDefault();
+        } else if (k === "c") {
+          a.copySelected();
+          e.preventDefault();
+        } else if (k === "v") {
+          a.pasteClipboard();
+          e.preventDefault();
+        } else if (k === "d") {
+          a.duplicateSelected();
+          e.preventDefault();
+        } else if (k === "z") {
+          if (e.shiftKey) a.redo();
+          else a.undo();
+          e.preventDefault();
+        } else if (k === "y") {
+          a.redo();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
         a.deleteSelected();
         e.preventDefault();
-      } else if (e.key === "PageUp") {
+      } else if (e.key === "[") {
+        a.rotate(e.shiftKey ? -90 : -15);
+        e.preventDefault();
+      } else if (e.key === "]") {
+        a.rotate(e.shiftKey ? 90 : 15);
+        e.preventDefault();
+      } else if (k === "l") {
+        a.toggleLock();
+        e.preventDefault();
+      } else if (e.key === "0") {
+        a.fit();
+        e.preventDefault();
+      } else if (e.key === "+" || e.key === "=" || e.key === "PageUp") {
         a.zoomBy(1.2);
         e.preventDefault();
-      } else if (e.key === "PageDown") {
+      } else if (e.key === "-" || e.key === "_" || e.key === "PageDown") {
         a.zoomBy(1 / 1.2);
         e.preventDefault();
       } else if (e.key === "ArrowUp") {
-        a.nudgeSelected(0, -1);
+        a.nudgeSelected(0, -1, e.shiftKey);
         e.preventDefault();
       } else if (e.key === "ArrowDown") {
-        a.nudgeSelected(0, 1);
+        a.nudgeSelected(0, 1, e.shiftKey);
         e.preventDefault();
       } else if (e.key === "ArrowLeft") {
-        a.nudgeSelected(-1, 0);
+        a.nudgeSelected(-1, 0, e.shiftKey);
         e.preventDefault();
       } else if (e.key === "ArrowRight") {
-        a.nudgeSelected(1, 0);
+        a.nudgeSelected(1, 0, e.shiftKey);
         e.preventDefault();
       }
     };
@@ -470,6 +544,7 @@ export function FloorCanvas() {
               label={o.label.trim() || t(objectLabelKey(o.type))}
               onSelect={selectObject}
               onMove={handleObjectMove}
+              onTransform={handleObjectTransform}
               dragBound={makeObjectDragBound(o)}
             />
           ))}
@@ -510,9 +585,15 @@ export function FloorCanvas() {
       )}
 
       <div className="zoom-controls">
-        <button onClick={() => zoomBy(1.2)} title={t("zoom.in")} aria-label={t("zoom.in")}>+</button>
-        <button onClick={() => zoomBy(1 / 1.2)} title={t("zoom.out")} aria-label={t("zoom.out")}>−</button>
-        <button onClick={fit} title={t("zoom.fit")} aria-label={t("zoom.fit")}>⤢</button>
+        <button onClick={() => zoomBy(1.2)} title={t("zoom.in")} aria-label={t("zoom.in")}>
+          <Icon name="zoomIn" />
+        </button>
+        <button onClick={() => zoomBy(1 / 1.2)} title={t("zoom.out")} aria-label={t("zoom.out")}>
+          <Icon name="zoomOut" />
+        </button>
+        <button onClick={fit} title={t("zoom.fit")} aria-label={t("zoom.fit")}>
+          <Icon name="fit" />
+        </button>
       </div>
       <div className="zoom-readout">{Math.round(scale * 100)}%</div>
     </div>
