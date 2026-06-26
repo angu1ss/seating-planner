@@ -20,11 +20,12 @@ interface TransformPatch {
 interface Props {
   obj: SceneObject;
   selected: boolean;
+  soleSelected: boolean;
   panLocked: boolean;
   ppm: number;
   palette: Palette;
   label: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, additive: boolean) => void;
   onMove: (id: string, x: number, y: number) => void;
   onTransform: (id: string, patch: TransformPatch) => void;
   dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
@@ -33,6 +34,7 @@ interface Props {
 export function ObjectNode({
   obj,
   selected,
+  soleSelected,
   panLocked,
   ppm,
   palette,
@@ -44,7 +46,7 @@ export function ObjectNode({
 }: Props) {
   const groupRef = useRef<Konva.Group>(null);
   const trRef = useRef<Konva.Transformer>(null);
-  const editable = selected && !obj.locked;
+  const editable = soleSelected && !obj.locked;
 
   useEffect(() => {
     if (editable && trRef.current && groupRef.current) {
@@ -64,7 +66,7 @@ export function ObjectNode({
 
   const handleSelect = (e: KonvaEventObject<Event>) => {
     e.cancelBubble = true;
-    onSelect(obj.id);
+    onSelect(obj.id, Boolean((e.evt as MouseEvent | undefined)?.shiftKey));
   };
 
   const handleTransformEnd = () => {

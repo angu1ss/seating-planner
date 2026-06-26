@@ -4,6 +4,8 @@ import { Toolbar } from "./components/panels/Toolbar";
 import { LeftPanel } from "./components/panels/LeftPanel";
 import { TablePanel } from "./components/panels/TablePanel";
 import { ObjectPanel } from "./components/panels/ObjectPanel";
+import { BulkPanel } from "./components/panels/BulkPanel";
+import { EmptyPanel } from "./components/panels/EmptyPanel";
 import { AddTableModal } from "./components/panels/AddTableModal";
 import { AddObjectModal } from "./components/panels/AddObjectModal";
 import { ShortcutsModal } from "./components/panels/ShortcutsModal";
@@ -11,7 +13,8 @@ import { FloorCanvas } from "./components/canvas/FloorCanvas";
 
 export default function App() {
   const theme = useStore((s) => s.settings.theme);
-  const selectedObjectId = useStore((s) => s.selectedObjectId);
+  const selectedIds = useStore((s) => s.selectedIds);
+  const tables = useStore((s) => s.tables);
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -21,6 +24,14 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  const tableSet = new Set(tables.map((t) => t.id));
+  const selObjectCount = selectedIds.filter((id) => !tableSet.has(id)).length;
+  let rightPanel;
+  if (selectedIds.length === 0) rightPanel = <EmptyPanel />;
+  else if (selObjectCount === 0) rightPanel = <TablePanel />;
+  else if (selectedIds.length === 1) rightPanel = <ObjectPanel />;
+  else rightPanel = <BulkPanel />;
 
   return (
     <div className="app">
@@ -46,7 +57,7 @@ export default function App() {
           <FloorCanvas />
         </main>
         <aside className={`side right ${rightOpen ? "open" : ""}`}>
-          {selectedObjectId ? <ObjectPanel /> : <TablePanel />}
+          {rightPanel}
         </aside>
         {(leftOpen || rightOpen) && (
           <div

@@ -1,7 +1,5 @@
 import { useStore } from "../../store";
 import { useT } from "../../i18n";
-import { ObjectsList } from "./ObjectsList";
-import { TablesList } from "./TablesList";
 import { Icon } from "../Icon";
 import type { ChairStyle, Side, TableModel, TableShape } from "../../types";
 import { isTight, maxComfortableSeats, seatSpacing } from "../../geometry";
@@ -34,24 +32,7 @@ export function TablePanel() {
 
   const selected = tables.filter((tb) => selectedIds.includes(tb.id));
 
-  if (selected.length === 0) {
-    return (
-      <div className="panel">
-        <div className="empty-hint">
-          <p>{t("table.noSelection")}</p>
-          <p className="muted">{t("table.noSelectionHint")}</p>
-        </div>
-        <section className="panel-section">
-          <h3>{t("table.listTitle")}</h3>
-          <TablesList />
-        </section>
-        <section className="panel-section">
-          <h3>{t("obj.listTitle")}</h3>
-          <ObjectsList />
-        </section>
-      </div>
-    );
-  }
+  if (selected.length === 0) return null;
 
   if (selected.length > 1) {
     return <MultiEditor tables={selected} />;

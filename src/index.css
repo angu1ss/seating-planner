@@ -255,6 +255,8 @@ input, select {
 }
 .panel-head-row h3 { margin: 0; }
 
+.select-all { margin-bottom: 8px; }
+
 .obj-list {
   display: flex;
   flex-direction: column;

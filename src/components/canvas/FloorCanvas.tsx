@@ -81,9 +81,7 @@ export function FloorCanvas() {
   const objects = useStore((s) => s.objects);
   const settings = useStore((s) => s.settings);
   const selectedIds = useStore((s) => s.selectedIds);
-  const selectedObjectId = useStore((s) => s.selectedObjectId);
   const select = useStore((s) => s.select);
-  const selectObject = useStore((s) => s.selectObject);
   const updateObject = useStore((s) => s.updateObject);
   const selectMany = useStore((s) => s.selectMany);
   const clearSelection = useStore((s) => s.clearSelection);
@@ -94,7 +92,7 @@ export function FloorCanvas() {
   const duplicateSelected = useStore((s) => s.duplicateSelected);
   const deleteSelected = useStore((s) => s.deleteSelected);
   const nudgeSelected = useStore((s) => s.nudgeSelected);
-  const selectAllTables = useStore((s) => s.selectAllTables);
+  const selectAll = useStore((s) => s.selectAll);
   const rotateSelection = useStore((s) => s.rotateSelection);
   const toggleLockSelection = useStore((s) => s.toggleLockSelection);
   const getDocument = useStore((s) => s.getDocument);
@@ -202,15 +200,12 @@ export function FloorCanvas() {
     if ((maxx - minx) * (maxy - miny) < 0.02) {
       clearSelection(); // treated as a click on empty space
     } else {
-      const ids = tables
-        .filter(
-          (tb) =>
-            tb.x + tb.w / 2 >= minx &&
-            tb.x - tb.w / 2 <= maxx &&
-            tb.y + tb.h / 2 >= miny &&
-            tb.y - tb.h / 2 <= maxy,
-        )
-        .map((tb) => tb.id);
+      const inside = (el: { x: number; y: number; w: number; h: number }) =>
+        el.x + el.w / 2 >= minx && el.x - el.w / 2 <= maxx && el.y + el.h / 2 >= miny && el.y - el.h / 2 <= maxy;
+      const ids = [
+        ...tables.filter(inside).map((t) => t.id),
+        ...objects.filter(inside).map((o) => o.id),
+      ];
       selectMany(ids);
     }
     setMarquee(null);
@@ -349,6 +344,24 @@ export function FloorCanvas() {
     });
   };
 
+  const handleTableTransform = (
+    id: string,
+    patch: { w?: number; h?: number; x?: number; y?: number; rotation?: number },
+  ) => {
+    const tbl = tables.find((t) => t.id === id);
+    if (!tbl) return;
+    const w = Math.max(0.3, patch.w ?? tbl.w);
+    const h = Math.max(0.3, patch.h ?? tbl.h);
+    const e = tableOuterExtent({ ...tbl, w, h });
+    updateTable(id, {
+      w: Number(w.toFixed(2)),
+      h: Number(h.toFixed(2)),
+      x: Number(clampTableCenter(patch.x ?? tbl.x, e.rx, venue.width).toFixed(3)),
+      y: Number(clampTableCenter(patch.y ?? tbl.y, e.ry, venue.height).toFixed(3)),
+      rotation: Math.round(patch.rotation ?? tbl.rotation),
+    });
+  };
+
   const makeObjectDragBound =
     (obj: { w: number; h: number }) => (absPos: { x: number; y: number }) => {
       const minX = obj.w / 2;
@@ -389,7 +402,7 @@ export function FloorCanvas() {
     deleteSelected,
     nudgeSelected,
     zoomBy,
-    selectAll: selectAllTables,
+    selectAll,
     clearSel: clearSelection,
     rotate: rotateSelection,
     toggleLock: toggleLockSelection,
@@ -537,12 +550,13 @@ export function FloorCanvas() {
             <ObjectNode
               key={o.id}
               obj={o}
-              selected={o.id === selectedObjectId}
+              selected={selectedIds.includes(o.id)}
+              soleSelected={selectedIds.length === 1 && selectedIds[0] === o.id}
               panLocked={spaceDown}
               ppm={PPM}
               palette={palette}
               label={o.label.trim() || t(objectLabelKey(o.type))}
-              onSelect={selectObject}
+              onSelect={select}
               onMove={handleObjectMove}
               onTransform={handleObjectTransform}
               dragBound={makeObjectDragBound(o)}
@@ -553,6 +567,7 @@ export function FloorCanvas() {
               key={tbl.id}
               table={tbl}
               selected={selectedIds.includes(tbl.id)}
+              soleSelected={selectedIds.length === 1 && selectedIds[0] === tbl.id}
               tooClose={tooCloseSet.has(tbl.id)}
               panLocked={spaceDown}
               ppm={PPM}
@@ -563,6 +578,7 @@ export function FloorCanvas() {
               onDragStartTable={handleDragStart}
               onDragMove={handleDragMove}
               onMove={handleDragEnd}
+              onTransform={handleTableTransform}
               dragBound={makeDragBound(tbl)}
             />
           ))}

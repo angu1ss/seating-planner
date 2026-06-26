@@ -5,9 +5,9 @@ import { Icon } from "../Icon";
 
 export function ObjectPanel() {
   const t = useT();
-  const obj = useStore((s) => s.objects.find((o) => o.id === s.selectedObjectId) ?? null);
+  const obj = useStore((s) => s.objects.find((o) => s.selectedIds.includes(o.id)) ?? null);
   const updateObject = useStore((s) => s.updateObject);
-  const removeObject = useStore((s) => s.removeObject);
+  const removeObjects = useStore((s) => s.removeObjects);
 
   if (!obj) return null;
   const locked = obj.locked;
@@ -80,7 +80,7 @@ export function ObjectPanel() {
       </section>
 
       <section className="panel-section row-actions">
-        <button className="btn danger" disabled={locked} onClick={() => removeObject(obj.id)}>
+        <button className="btn danger" disabled={locked} onClick={() => removeObjects([obj.id])}>
           <Icon name="delete" /> {t("common.delete")}
         </button>
       </section>

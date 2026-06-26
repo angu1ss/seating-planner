@@ -1,4 +1,6 @@
-import { Group, Rect, Ellipse, Circle, Text, Path } from "react-konva";
+import { useEffect, useRef } from "react";
+import { Group, Rect, Ellipse, Circle, Text, Path, Transformer } from "react-konva";
+import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, TableModel } from "../../types";
 import { CHAIR_RADIUS } from "../../constants";
@@ -9,9 +11,18 @@ import { LOCK_BODY, LOCK_SHACKLE_CLOSED } from "../icons";
 
 const LOCK_ICON = 14;
 
+interface TransformPatch {
+  w?: number;
+  h?: number;
+  x?: number;
+  y?: number;
+  rotation?: number;
+}
+
 interface Props {
   table: TableModel;
   selected: boolean;
+  soleSelected: boolean;
   tooClose: boolean;
   panLocked: boolean;
   ppm: number;
@@ -22,6 +33,7 @@ interface Props {
   onDragStartTable: (id: string) => void;
   onDragMove: (id: string, x: number, y: number) => void;
   onMove: (id: string, x: number, y: number) => void;
+  onTransform: (id: string, patch: TransformPatch) => void;
   dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
 }
 
@@ -30,6 +42,7 @@ const PODIUM_HALO = 0.14; // meters
 export function TableNode({
   table,
   selected,
+  soleSelected,
   tooClose,
   panLocked,
   ppm,
@@ -40,9 +53,36 @@ export function TableNode({
   onDragStartTable,
   onDragMove,
   onMove,
+  onTransform,
   dragBound,
 }: Props) {
   const t = useT();
+  const groupRef = useRef<Konva.Group>(null);
+  const trRef = useRef<Konva.Transformer>(null);
+  const editable = soleSelected && !table.locked;
+
+  useEffect(() => {
+    if (editable && trRef.current && groupRef.current) {
+      trRef.current.nodes([groupRef.current]);
+      trRef.current.getLayer()?.batchDraw();
+    }
+  }, [editable, table.w, table.h, table.shape]);
+
+  const handleTransformEnd = () => {
+    const node = groupRef.current;
+    if (!node) return;
+    const sx = node.scaleX();
+    const sy = node.scaleY();
+    node.scaleX(1);
+    node.scaleY(1);
+    onTransform(table.id, {
+      w: Math.max(0.3, table.w * sx),
+      h: Math.max(0.3, table.h * sy),
+      x: node.x() / ppm,
+      y: node.y() / ppm,
+      rotation: node.rotation(),
+    });
+  };
   const tight = isTight(table, minSpacing);
   const chairStyle: ChairStyle = table.chairStyle ?? projectChairStyle;
   const chairs = computeChairs(table);
@@ -72,7 +112,9 @@ export function TableNode({
   };
 
   return (
+    <>
     <Group
+      ref={groupRef}
       x={table.x * ppm}
       y={table.y * ppm}
       rotation={table.rotation}
@@ -80,6 +122,7 @@ export function TableNode({
       dragBoundFunc={dragBound}
       onClick={handleSelect}
       onTap={handleSelect}
+      onTransformEnd={handleTransformEnd}
       onDragStart={() => {
         if (!selected) onSelect(table.id, false);
         onDragStartTable(table.id);
@@ -202,5 +245,17 @@ export function TableNode({
         </Group>
       )}
     </Group>
+      {editable && (
+        <Transformer
+          ref={trRef}
+          keepRatio
+          flipEnabled={false}
+          rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+          anchorStroke={palette.tableSelected}
+          borderStroke={palette.tableSelected}
+          boundBoxFunc={(oldBox, newBox) => (newBox.width < 12 || newBox.height < 12 ? oldBox : newBox)}
+        />
+      )}
+    </>
   );
 }
