@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useStore } from "../../store";
+import { useStore, activeSheet } from "../../store";
 import { useT } from "../../i18n";
 import { objectLabelKey } from "../../constants";
 import { Icon } from "../Icon";
@@ -7,8 +7,8 @@ import { OBJECT_ICONS } from "../../iconmap";
 
 export function ElementsList() {
   const t = useT();
-  const tables = useStore((s) => s.tables);
-  const objects = useStore((s) => s.objects);
+  const tables = useStore((s) => activeSheet(s).tables);
+  const objects = useStore((s) => activeSheet(s).objects);
   const select = useStore((s) => s.select);
   const updateTables = useStore((s) => s.updateTables);
   const updateObjects = useStore((s) => s.updateObjects);

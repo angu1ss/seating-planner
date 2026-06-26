@@ -1,11 +1,11 @@
-import { useStore } from "../../store";
+import { useStore, activeSheet } from "../../store";
 import { useT } from "../../i18n";
 import { objectLabelKey } from "../../constants";
 import { Icon } from "../Icon";
 
 export function ObjectPanel() {
   const t = useT();
-  const obj = useStore((s) => s.objects.find((o) => s.selectedIds.includes(o.id)) ?? null);
+  const obj = useStore((s) => activeSheet(s).objects.find((o) => s.selectedIds.includes(o.id)) ?? null);
   const updateObject = useStore((s) => s.updateObject);
   const removeObjects = useStore((s) => s.removeObjects);
 

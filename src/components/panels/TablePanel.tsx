@@ -1,4 +1,4 @@
-import { useStore } from "../../store";
+import { useStore, activeSheet } from "../../store";
 import { useT } from "../../i18n";
 import { Icon } from "../Icon";
 import type { ChairStyle, Side, TableModel, TableShape } from "../../types";
@@ -21,7 +21,7 @@ function common<T>(vals: T[]): Maybe<T> {
 export function TablePanel() {
   const t = useT();
   const selectedIds = useStore((s) => s.selectedIds);
-  const tables = useStore((s) => s.tables);
+  const tables = useStore((s) => activeSheet(s).tables);
   const minSpacing = useStore((s) => s.settings.minSeatSpacing);
   const updateTable = useStore((s) => s.updateTable);
   const updateTables = useStore((s) => s.updateTables);

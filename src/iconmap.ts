@@ -6,7 +6,9 @@ import {
   faMoon,
   faMagnifyingGlassPlus,
   faMagnifyingGlassMinus,
-  faExpand,
+  faUpRightAndDownLeftFromCenter,
+  faGear,
+  faPenToSquare,
   faPlus,
   faTrash,
   faClone,
@@ -14,7 +16,7 @@ import {
   faLock,
   faLockOpen,
   faXmark,
-  faCircleQuestion,
+  faQuestion,
   faRotateLeft,
   faRotateRight,
   faMasksTheater,
@@ -48,7 +50,9 @@ export type UiIconName =
   | "close"
   | "help"
   | "undo"
-  | "redo";
+  | "redo"
+  | "settings"
+  | "edit";
 
 export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   import: faFileImport,
@@ -58,7 +62,7 @@ export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   dark: faMoon,
   zoomIn: faMagnifyingGlassPlus,
   zoomOut: faMagnifyingGlassMinus,
-  fit: faExpand,
+  fit: faUpRightAndDownLeftFromCenter,
   add: faPlus,
   delete: faTrash,
   duplicate: faClone,
@@ -66,9 +70,11 @@ export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   lock: faLock,
   unlock: faLockOpen,
   close: faXmark,
-  help: faCircleQuestion,
+  help: faQuestion,
   undo: faRotateLeft,
   redo: faRotateRight,
+  settings: faGear,
+  edit: faPenToSquare,
 };
 
 export const OBJECT_ICONS: Record<SceneObjectType, IconDefinition> = {

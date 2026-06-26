@@ -18,7 +18,7 @@ export function readJSONFile(file: File): Promise<ProjectState> {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result)) as ProjectState;
-        if (!parsed || !parsed.project || !parsed.venue) {
+        if (!parsed || !parsed.project || !parsed.sheets) {
           throw new Error("Не похоже на проект рассадки");
         }
         resolve(parsed);

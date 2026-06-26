@@ -2,13 +2,14 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Stage, Layer, Rect, Line } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { TableModel } from "../../types";
-import { useStore, undo, redo } from "../../store";
+import { useStore, undo, redo, activeSheet, useCanUndo, useCanRedo } from "../../store";
 import { getPalette } from "../../theme";
 import { useT } from "../../i18n";
 import { clampTableCenter, findFreeSpot, tableOuterExtent, tablesOverlap, tooCloseTables } from "../../geometry";
 import { objectLabelKey } from "../../constants";
 import { downloadJSON, slugify } from "../../utils/file";
 import { Icon } from "../Icon";
+import { TabBar } from "../panels/TabBar";
 import { TableNode } from "./TableNode";
 import { ObjectNode } from "./ObjectNode";
 
@@ -55,8 +56,10 @@ function isTypingTarget(el: EventTarget | null): boolean {
   );
 }
 
-export function FloorCanvas() {
+export function FloorCanvas({ onHelp }: { onHelp: () => void }) {
   const t = useT();
+  const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [scale, setScale] = useState(1);
@@ -76,9 +79,9 @@ export function FloorCanvas() {
     () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches,
   );
 
-  const venue = useStore((s) => s.venue);
-  const tables = useStore((s) => s.tables);
-  const objects = useStore((s) => s.objects);
+  const venue = useStore((s) => activeSheet(s).venue);
+  const tables = useStore((s) => activeSheet(s).tables);
+  const objects = useStore((s) => activeSheet(s).objects);
   const settings = useStore((s) => s.settings);
   const selectedIds = useStore((s) => s.selectedIds);
   const select = useStore((s) => s.select);
@@ -600,7 +603,28 @@ export function FloorCanvas() {
       </Stage>
       )}
 
+      <TabBar />
+
+      <button
+        className="editor-corner editor-help"
+        onClick={onHelp}
+        title={t("help.title")}
+        aria-label={t("help.title")}
+      >
+        <Icon name="help" />
+      </button>
+
+      <div className="editor-corner editor-undo">
+        <button onClick={undo} disabled={!canUndo} title={t("common.undo")} aria-label={t("common.undo")}>
+          <Icon name="undo" />
+        </button>
+        <button onClick={redo} disabled={!canRedo} title={t("common.redo")} aria-label={t("common.redo")}>
+          <Icon name="redo" />
+        </button>
+      </div>
+
       <div className="zoom-controls">
+        <span className="zoom-readout">{Math.round(scale * 100)}%</span>
         <button onClick={() => zoomBy(1.2)} title={t("zoom.in")} aria-label={t("zoom.in")}>
           <Icon name="zoomIn" />
         </button>
@@ -611,7 +635,6 @@ export function FloorCanvas() {
           <Icon name="fit" />
         </button>
       </div>
-      <div className="zoom-readout">{Math.round(scale * 100)}%</div>
     </div>
   );
 }

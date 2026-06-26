@@ -1,14 +1,15 @@
 import { useT } from "../../i18n";
 import { ElementsList } from "./ElementsList";
+import { VenueSettings } from "./VenueSettings";
 
 export function EmptyPanel() {
   const t = useT();
   return (
     <div className="panel">
-      <div className="empty-hint">
-        <p>{t("table.noSelection")}</p>
-        <p className="muted">{t("table.noSelectionHint")}</p>
-      </div>
+      <section className="panel-section">
+        <h3>{t("left.hall")}</h3>
+        <VenueSettings />
+      </section>
       <section className="panel-section">
         <h3>{t("elements.title")}</h3>
         <ElementsList />

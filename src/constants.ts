@@ -1,4 +1,4 @@
-import type { ProjectState, SceneObjectType, TableShape } from "./types";
+import type { ProjectState, SceneObjectType, Sheet, TableShape } from "./types";
 
 export const SCHEMA_VERSION = 1;
 
@@ -79,29 +79,23 @@ export function objectLabelKey(type: SceneObjectType): string {
   return `obj.${type}`;
 }
 
-export function createInitialState(): ProjectState {
+export function createSheet(name: string): Sheet {
   return {
-    schemaVersion: SCHEMA_VERSION,
-    project: {
-      id: crypto.randomUUID(),
-      name: "",
-      eventType: "wedding",
-      date: "",
-      note: "",
-    },
-    venue: {
-      width: 12,
-      height: 8,
-      gridStep: 0.5,
-      snapStep: 0.1,
-      snapToGrid: true,
-    },
-    settings: {
-      minSeatSpacing: 0.65,
-      chairStyle: "round",
-      theme: "light",
-    },
+    id: crypto.randomUUID(),
+    name,
+    venue: { width: 12, height: 8, gridStep: 0.5, snapStep: 0.1, snapToGrid: true },
     tables: [],
     objects: [],
+  };
+}
+
+export function createInitialState(): ProjectState {
+  const sheet = createSheet("Hall 1");
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    project: { id: crypto.randomUUID(), name: "", eventType: "wedding", date: "", note: "" },
+    settings: { minSeatSpacing: 0.65, chairStyle: "round", theme: "light" },
+    sheets: [sheet],
+    activeSheetId: sheet.id,
   };
 }

@@ -92,11 +92,19 @@ export interface ProjectMeta {
   note: string;
 }
 
+/** One hall / floor (Excel-like sheet) with its own venue, tables and interior elements. */
+export interface Sheet {
+  id: string;
+  name: string;
+  venue: Venue;
+  tables: TableModel[];
+  objects: SceneObject[];
+}
+
 export interface ProjectState {
   schemaVersion: number;
   project: ProjectMeta;
-  venue: Venue;
   settings: Settings;
-  tables: TableModel[];
-  objects: SceneObject[];
+  sheets: Sheet[];
+  activeSheetId: string;
 }

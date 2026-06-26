@@ -1,11 +1,11 @@
-import { useStore } from "../../store";
+import { useStore, activeSheet } from "../../store";
 import { useT } from "../../i18n";
 import { Icon } from "../Icon";
 
 export function BulkPanel() {
   const t = useT();
   const selectedIds = useStore((s) => s.selectedIds);
-  const tables = useStore((s) => s.tables);
+  const tables = useStore((s) => activeSheet(s).tables);
   const updateTables = useStore((s) => s.updateTables);
   const updateObjects = useStore((s) => s.updateObjects);
   const duplicateSelected = useStore((s) => s.duplicateSelected);
