@@ -4,49 +4,68 @@ import type { ChairStyle, TableModel } from "../../types";
 import { CHAIR_RADIUS } from "../../constants";
 import { computeChairs, isTight } from "../../geometry";
 import type { Palette } from "../../theme";
+import { useT } from "../../i18n";
 
 interface Props {
   table: TableModel;
   selected: boolean;
+  tooClose: boolean;
+  locked: boolean;
   ppm: number;
   palette: Palette;
   projectChairStyle: ChairStyle;
   minSpacing: number;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, additive: boolean) => void;
+  onDragStartTable: (id: string) => void;
+  onDragMove: (id: string, x: number, y: number) => void;
   onMove: (id: string, x: number, y: number) => void;
+  dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
 }
+
+const PODIUM_HALO = 0.14; // meters
 
 export function TableNode({
   table,
   selected,
+  tooClose,
+  locked,
   ppm,
   palette,
   projectChairStyle,
   minSpacing,
   onSelect,
+  onDragStartTable,
+  onDragMove,
   onMove,
+  dragBound,
 }: Props) {
+  const t = useT();
   const tight = isTight(table, minSpacing);
   const chairStyle: ChairStyle = table.chairStyle ?? projectChairStyle;
   const chairs = computeChairs(table);
+  const label = table.name.trim() || `${t("table.word")} ${table.number}`;
 
   const stroke = selected
     ? palette.tableSelected
-    : tight
-      ? palette.tableTight
-      : table.isPodium
-        ? palette.podiumStroke
-        : palette.tableStroke;
-  const strokeWidth = selected ? 3 : tight || table.isPodium ? 2.5 : 1.5;
-  const dash = table.isPodium && !selected ? [10, 5] : undefined;
+    : tooClose
+      ? palette.tableClose
+      : tight
+        ? palette.tableTight
+        : table.isPodium
+          ? palette.podiumStroke
+          : palette.tableStroke;
+  const strokeWidth = selected ? 3 : tooClose || tight || table.isPodium ? 2.5 : 1.5;
+  const dash = !selected && table.isPodium ? [10, 5] : !selected && tooClose ? [6, 4] : undefined;
 
   const wpx = table.w * ppm;
   const hpx = table.h * ppm;
   const chairR = CHAIR_RADIUS * ppm;
+  const haloPx = PODIUM_HALO * ppm;
 
   const handleSelect = (e: KonvaEventObject<Event>) => {
     e.cancelBubble = true;
-    onSelect(table.id);
+    const additive = Boolean((e.evt as MouseEvent | undefined)?.shiftKey);
+    onSelect(table.id, additive);
   };
 
   return (
@@ -54,10 +73,15 @@ export function TableNode({
       x={table.x * ppm}
       y={table.y * ppm}
       rotation={table.rotation}
-      draggable
+      draggable={!locked}
+      dragBoundFunc={dragBound}
       onClick={handleSelect}
       onTap={handleSelect}
-      onDragStart={() => onSelect(table.id)}
+      onDragStart={() => {
+        if (!selected) onSelect(table.id, false);
+        onDragStartTable(table.id);
+      }}
+      onDragMove={(e) => onDragMove(table.id, e.target.x() / ppm, e.target.y() / ppm)}
       onDragEnd={(e) => onMove(table.id, e.target.x() / ppm, e.target.y() / ppm)}
     >
       {/* Chairs (drawn first, behind the table top) */}
@@ -92,6 +116,31 @@ export function TableNode({
         ),
       )}
 
+      {/* Podium halo ring */}
+      {table.isPodium &&
+        (table.shape === "ellipse" ? (
+          <Ellipse
+            radiusX={wpx / 2 + haloPx}
+            radiusY={hpx / 2 + haloPx}
+            stroke={palette.podiumHalo}
+            strokeWidth={2}
+            dash={[3, 4]}
+            listening={false}
+          />
+        ) : (
+          <Rect
+            x={-wpx / 2 - haloPx}
+            y={-hpx / 2 - haloPx}
+            width={wpx + haloPx * 2}
+            height={hpx + haloPx * 2}
+            cornerRadius={Math.min(wpx, hpx) * 0.06 + haloPx}
+            stroke={palette.podiumHalo}
+            strokeWidth={2}
+            dash={[3, 4]}
+            listening={false}
+          />
+        ))}
+
       {/* Table top */}
       {table.shape === "ellipse" ? (
         <Ellipse
@@ -118,7 +167,7 @@ export function TableNode({
 
       {/* Label */}
       <Text
-        text={`${table.name}\n${table.seatCount} мест`}
+        text={`${label}\n${table.seatCount} ${t("table.seatsShort")}`}
         width={Math.max(wpx, 60)}
         height={hpx}
         offsetX={Math.max(wpx, 60) / 2}

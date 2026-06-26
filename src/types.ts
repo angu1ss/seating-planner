@@ -18,6 +18,8 @@ export interface Seat {
 
 export interface TableModel {
   id: string;
+  /** Auto-assigned table number (smallest free positive integer). */
+  number: number;
   name: string;
   shape: TableShape;
   /** Center position in meters. */

@@ -9,34 +9,57 @@ export const CHAIR_RADIUS = 0.22;
 
 export interface TablePreset {
   id: string;
-  label: string;
   shape: TableShape;
   w: number;
   h: number;
   seatCount: number;
+  /** Optional special name key (e.g. emperor); otherwise label is derived. */
+  nameKey?: string;
 }
 
 export const TABLE_PRESETS: TablePreset[] = [
-  { id: "round-150", label: "Круглый Ø150", shape: "ellipse", w: 1.5, h: 1.5, seatCount: 8 },
-  { id: "round-180", label: "Круглый Ø180", shape: "ellipse", w: 1.8, h: 1.8, seatCount: 10 },
-  { id: "rect-120x80", label: "Прямоуг. 120×80", shape: "rect", w: 1.2, h: 0.8, seatCount: 4 },
-  { id: "rect-180x80", label: "Прямоуг. 180×80", shape: "rect", w: 1.8, h: 0.8, seatCount: 6 },
-  { id: "rect-240x90", label: "Прямоуг. 240×90", shape: "rect", w: 2.4, h: 0.9, seatCount: 8 },
-  { id: "emperor-600x120", label: "Императорский 600×120", shape: "rect", w: 6.0, h: 1.2, seatCount: 18 },
+  { id: "round-150", shape: "ellipse", w: 1.5, h: 1.5, seatCount: 8 },
+  { id: "round-180", shape: "ellipse", w: 1.8, h: 1.8, seatCount: 10 },
+  { id: "rect-120x80", shape: "rect", w: 1.2, h: 0.8, seatCount: 4 },
+  { id: "rect-180x80", shape: "rect", w: 1.8, h: 0.8, seatCount: 6 },
+  { id: "rect-240x90", shape: "rect", w: 2.4, h: 0.9, seatCount: 8 },
+  { id: "emperor-600x120", shape: "rect", w: 6.0, h: 1.2, seatCount: 18, nameKey: "shape.emperor" },
 ];
 
-export const VENUE_PRESETS = [
-  { id: "small", label: "Маленький 8×6", width: 8, height: 6 },
-  { id: "medium", label: "Средний 12×8", width: 12, height: 8 },
-  { id: "large", label: "Большой 18×12", width: 18, height: 12 },
+export interface VenuePreset {
+  id: string;
+  sizeKey: string;
+  width: number;
+  height: number;
+}
+
+export const VENUE_PRESETS: VenuePreset[] = [
+  { id: "small", sizeKey: "size.small", width: 8, height: 6 },
+  { id: "medium", sizeKey: "size.medium", width: 12, height: 8 },
+  { id: "large", sizeKey: "size.large", width: 18, height: 12 },
 ];
+
+const cm = (m: number) => Math.round(m * 100);
+
+/** Localized, human-readable label for a table preset. */
+export function presetLabel(p: TablePreset, t: (k: string) => string): string {
+  if (p.nameKey) return `${t(p.nameKey)} ${cm(p.w)}×${cm(p.h)}`;
+  if (p.shape === "ellipse") {
+    return p.w === p.h ? `${t("shape.round")} Ø${cm(p.w)}` : `${t("shape.ellipse")} ${cm(p.w)}×${cm(p.h)}`;
+  }
+  return `${t("shape.rect")} ${cm(p.w)}×${cm(p.h)}`;
+}
+
+export function venuePresetLabel(v: VenuePreset, t: (k: string) => string): string {
+  return `${t(v.sizeKey)} ${v.width}×${v.height}`;
+}
 
 export function createInitialState(): ProjectState {
   return {
     schemaVersion: SCHEMA_VERSION,
     project: {
       id: crypto.randomUUID(),
-      name: "Новый проект",
+      name: "",
       eventType: "wedding",
       date: "",
       note: "",

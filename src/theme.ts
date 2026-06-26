@@ -10,7 +10,9 @@ export interface Palette {
   tableStroke: string;
   tableSelected: string;
   tableTight: string;
+  tableClose: string;
   podiumStroke: string;
+  podiumHalo: string;
   chairFill: string;
   chairStroke: string;
   labelText: string;
@@ -26,7 +28,9 @@ const light: Palette = {
   tableStroke: "#7c5fb0",
   tableSelected: "#3b82f6",
   tableTight: "#e0a100",
+  tableClose: "#dc2626",
   podiumStroke: "#b8860b",
+  podiumHalo: "#caa64a",
   chairFill: "#f4f6f9",
   chairStroke: "#8a97a5",
   labelText: "#26303a",
@@ -42,7 +46,9 @@ const dark: Palette = {
   tableStroke: "#9d86d6",
   tableSelected: "#60a5fa",
   tableTight: "#f0b429",
+  tableClose: "#f87171",
   podiumStroke: "#d9a441",
+  podiumHalo: "#e0b85e",
   chairFill: "#222c36",
   chairStroke: "#566472",
   labelText: "#e6edf3",

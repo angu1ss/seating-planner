@@ -1,36 +1,56 @@
 import { useStore } from "../../store";
-import type { ChairStyle, Side, TableShape } from "../../types";
+import { useT } from "../../i18n";
+import type { ChairStyle, Side, TableModel, TableShape } from "../../types";
 import { isTight, maxComfortableSeats, seatSpacing } from "../../geometry";
 
-const SIDES: { key: Side; label: string }[] = [
-  { key: "top", label: "Верх" },
-  { key: "right", label: "Право" },
-  { key: "bottom", label: "Низ" },
-  { key: "left", label: "Лево" },
+const SIDES: { key: Side; labelKey: string }[] = [
+  { key: "top", labelKey: "side.top" },
+  { key: "right", labelKey: "side.right" },
+  { key: "bottom", labelKey: "side.bottom" },
+  { key: "left", labelKey: "side.left" },
 ];
 
+const MIXED = "__mixed__" as const;
+type Maybe<T> = T | typeof MIXED;
+
+function common<T>(vals: T[]): Maybe<T> {
+  return vals.every((v) => v === vals[0]) ? vals[0] : MIXED;
+}
+
 export function TablePanel() {
-  const selectedId = useStore((s) => s.selectedId);
-  const table = useStore((s) => s.tables.find((t) => t.id === s.selectedId) ?? null);
+  const t = useT();
+  const selectedIds = useStore((s) => s.selectedIds);
+  const tables = useStore((s) => s.tables);
   const minSpacing = useStore((s) => s.settings.minSeatSpacing);
   const updateTable = useStore((s) => s.updateTable);
+  const updateTables = useStore((s) => s.updateTables);
   const removeTable = useStore((s) => s.removeTable);
   const duplicateTable = useStore((s) => s.duplicateTable);
+  const duplicateSelected = useStore((s) => s.duplicateSelected);
+  const deleteSelected = useStore((s) => s.deleteSelected);
 
-  if (!selectedId || !table) {
+  const selected = tables.filter((tb) => selectedIds.includes(tb.id));
+
+  if (selected.length === 0) {
     return (
       <div className="panel">
         <div className="empty-hint">
-          <p>Стол не выбран.</p>
-          <p className="muted">Добавьте стол слева и кликните по нему на холсте, чтобы изменить свойства.</p>
+          <p>{t("table.noSelection")}</p>
+          <p className="muted">{t("table.noSelectionHint")}</p>
         </div>
       </div>
     );
   }
 
+  if (selected.length > 1) {
+    return <MultiEditor tables={selected} />;
+  }
+
+  const table = selected[0];
   const tight = isTight(table, minSpacing);
   const spacing = seatSpacing(table);
   const maxSeats = maxComfortableSeats(table, minSpacing);
+  const m = t("unit.m");
 
   const toggleSide = (side: Side, on: boolean) => {
     const set = new Set(table.disabledSides);
@@ -42,24 +62,28 @@ export function TablePanel() {
   return (
     <div className="panel">
       <section className="panel-section">
-        <h3>Стол</h3>
+        <h3>{`${t("table.word")} ${table.number}`}</h3>
         <label className="field">
-          <span>Название</span>
-          <input value={table.name} onChange={(e) => updateTable(table.id, { name: e.target.value })} />
+          <span>{t("table.name")}</span>
+          <input
+            value={table.name}
+            placeholder={`${t("table.word")} ${table.number}`}
+            onChange={(e) => updateTable(table.id, { name: e.target.value })}
+          />
         </label>
         <label className="field">
-          <span>Форма</span>
+          <span>{t("table.shape")}</span>
           <select
             value={table.shape}
             onChange={(e) => updateTable(table.id, { shape: e.target.value as TableShape })}
           >
-            <option value="rect">Прямоугольный</option>
-            <option value="ellipse">Эллипс / круг</option>
+            <option value="rect">{t("shape.rect")}</option>
+            <option value="ellipse">{t("shape.round")}</option>
           </select>
         </label>
         <div className="field-2col">
           <label className="field">
-            <span>{table.shape === "ellipse" ? "Ось X, м" : "Ширина, м"}</span>
+            <span>{table.shape === "ellipse" ? t("table.axisX") : t("left.width")}</span>
             <input
               type="number"
               min={0.3}
@@ -69,7 +93,7 @@ export function TablePanel() {
             />
           </label>
           <label className="field">
-            <span>{table.shape === "ellipse" ? "Ось Y, м" : "Длина, м"}</span>
+            <span>{table.shape === "ellipse" ? t("table.axisY") : t("left.length")}</span>
             <input
               type="number"
               min={0.3}
@@ -80,7 +104,7 @@ export function TablePanel() {
           </label>
         </div>
         <label className="field">
-          <span>Поворот, °</span>
+          <span>{t("table.rotation")}</span>
           <input
             type="number"
             step={5}
@@ -91,18 +115,19 @@ export function TablePanel() {
       </section>
 
       <section className="panel-section">
-        <h3>Места</h3>
+        <h3>{t("table.seats")}</h3>
         <div className="stepper">
           <button onClick={() => updateTable(table.id, { seatCount: Math.max(0, table.seatCount - 1) })}>−</button>
           <span className="stepper-val">{table.seatCount}</span>
           <button onClick={() => updateTable(table.id, { seatCount: table.seatCount + 1 })}>+</button>
         </div>
         <p className={tight ? "warn" : "muted"}>
-          Шаг места: {spacing.toFixed(2)} м · комфортно до {maxSeats} мест
-          {tight ? " · тесно!" : ""}
+          {t("table.seatStep")}: {spacing.toFixed(2)} {m} · {t("table.comfortUpTo")} {maxSeats}{" "}
+          {t("table.seatsShort")}
+          {tight ? ` · ${t("table.tight")}` : ""}
         </p>
         <label className="field">
-          <span>Стул</span>
+          <span>{t("table.chair")}</span>
           <select
             value={table.chairStyle ?? "inherit"}
             onChange={(e) =>
@@ -111,15 +136,15 @@ export function TablePanel() {
               })
             }
           >
-            <option value="inherit">Как в проекте</option>
-            <option value="round">Круглый</option>
-            <option value="square">Квадратный</option>
+            <option value="inherit">{t("chair.inherit")}</option>
+            <option value="round">{t("chair.round")}</option>
+            <option value="square">{t("chair.square")}</option>
           </select>
         </label>
 
         {table.shape === "rect" && (
           <div className="sides">
-            <span className="field-caption">Активные стороны</span>
+            <span className="field-caption">{t("table.activeSides")}</span>
             <div className="sides-grid">
               {SIDES.map((s) => (
                 <label key={s.key} className="field-inline">
@@ -128,7 +153,7 @@ export function TablePanel() {
                     checked={!table.disabledSides.includes(s.key)}
                     onChange={(e) => toggleSide(s.key, e.target.checked)}
                   />
-                  <span>{s.label}</span>
+                  <span>{t(s.labelKey)}</span>
                 </label>
               ))}
             </div>
@@ -143,14 +168,151 @@ export function TablePanel() {
             checked={table.isPodium}
             onChange={(e) => updateTable(table.id, { isPodium: e.target.checked })}
           />
-          <span>Подиум (выше уровня пола)</span>
+          <span>{t("table.podium")}</span>
         </label>
       </section>
 
       <section className="panel-section row-actions">
-        <button className="btn" onClick={() => duplicateTable(table.id)}>Дублировать</button>
-        <button className="btn danger" onClick={() => removeTable(table.id)}>Удалить</button>
+        <button className="btn" onClick={() => duplicateTable(table.id)}>{t("common.duplicate")}</button>
+        <button className="btn danger" onClick={() => removeTable(table.id)}>{t("common.delete")}</button>
       </section>
     </div>
   );
+
+  function MultiEditor({ tables: sel }: { tables: TableModel[] }) {
+    const ids = sel.map((tb) => tb.id);
+    const cShape = common(sel.map((tb) => tb.shape));
+    const cW = common(sel.map((tb) => tb.w));
+    const cH = common(sel.map((tb) => tb.h));
+    const cRot = common(sel.map((tb) => tb.rotation));
+    const cSeat = common(sel.map((tb) => tb.seatCount));
+    const cChair = common(sel.map((tb) => tb.chairStyle));
+    const cPodium = common(sel.map((tb) => tb.isPodium));
+    const mix = t("table.mixed");
+    const m = t("unit.m");
+
+    const isEllipse = cShape === "ellipse";
+    const hintTable =
+      cShape !== MIXED && cW !== MIXED && cH !== MIXED && cSeat !== MIXED
+        ? { ...sel[0], shape: cShape, w: cW, h: cH, seatCount: cSeat }
+        : null;
+
+    return (
+      <div className="panel">
+        <section className="panel-section">
+          <h3>{`${t("table.selected")}: ${sel.length}`}</h3>
+          <p className="muted">{t("table.bulkHint")}</p>
+          <label className="field">
+            <span>{t("table.shape")}</span>
+            <select
+              value={cShape === MIXED ? "" : cShape}
+              disabled={cShape === MIXED}
+              onChange={(e) => updateTables(ids, { shape: e.target.value as TableShape })}
+            >
+              {cShape === MIXED && <option value="">{mix}</option>}
+              <option value="rect">{t("shape.rect")}</option>
+              <option value="ellipse">{t("shape.round")}</option>
+            </select>
+          </label>
+          <div className="field-2col">
+            <label className="field">
+              <span>{isEllipse ? t("table.axisX") : t("left.width")}</span>
+              <input
+                type="number"
+                min={0.3}
+                step={0.1}
+                disabled={cW === MIXED}
+                value={cW === MIXED ? "" : cW}
+                placeholder={mix}
+                onChange={(e) => updateTables(ids, { w: Math.max(0.3, Number(e.target.value)) })}
+              />
+            </label>
+            <label className="field">
+              <span>{isEllipse ? t("table.axisY") : t("left.length")}</span>
+              <input
+                type="number"
+                min={0.3}
+                step={0.1}
+                disabled={cH === MIXED}
+                value={cH === MIXED ? "" : cH}
+                placeholder={mix}
+                onChange={(e) => updateTables(ids, { h: Math.max(0.3, Number(e.target.value)) })}
+              />
+            </label>
+          </div>
+          <label className="field">
+            <span>{t("table.rotation")}</span>
+            <input
+              type="number"
+              step={5}
+              disabled={cRot === MIXED}
+              value={cRot === MIXED ? "" : cRot}
+              placeholder={mix}
+              onChange={(e) => updateTables(ids, { rotation: Number(e.target.value) % 360 })}
+            />
+          </label>
+        </section>
+
+        <section className="panel-section">
+          <h3>{t("table.seats")}</h3>
+          <div className="stepper">
+            <button
+              disabled={cSeat === MIXED}
+              onClick={() => typeof cSeat === "number" && updateTables(ids, { seatCount: Math.max(0, cSeat - 1) })}
+            >
+              −
+            </button>
+            <span className="stepper-val">{cSeat === MIXED ? mix : cSeat}</span>
+            <button
+              disabled={cSeat === MIXED}
+              onClick={() => typeof cSeat === "number" && updateTables(ids, { seatCount: cSeat + 1 })}
+            >
+              +
+            </button>
+          </div>
+          {hintTable && (
+            <p className={isTight(hintTable, minSpacing) ? "warn" : "muted"}>
+              {t("table.seatStep")}: {seatSpacing(hintTable).toFixed(2)} {m} · {t("table.comfortUpTo")}{" "}
+              {maxComfortableSeats(hintTable, minSpacing)} {t("table.seatsShort")}
+              {isTight(hintTable, minSpacing) ? ` · ${t("table.tight")}` : ""}
+            </p>
+          )}
+          <label className="field">
+            <span>{t("table.chair")}</span>
+            <select
+              disabled={cChair === MIXED}
+              value={cChair === MIXED ? "" : cChair === null ? "inherit" : cChair}
+              onChange={(e) =>
+                updateTables(ids, {
+                  chairStyle: e.target.value === "inherit" ? null : (e.target.value as ChairStyle),
+                })
+              }
+            >
+              {cChair === MIXED && <option value="">{mix}</option>}
+              <option value="inherit">{t("chair.inherit")}</option>
+              <option value="round">{t("chair.round")}</option>
+              <option value="square">{t("chair.square")}</option>
+            </select>
+          </label>
+        </section>
+
+        <section className="panel-section">
+          <label className="field-inline">
+            <input
+              type="checkbox"
+              disabled={cPodium === MIXED}
+              checked={cPodium === true}
+              onChange={(e) => updateTables(ids, { isPodium: e.target.checked })}
+            />
+            <span>{t("table.podium")}</span>
+          </label>
+        </section>
+
+        <section className="panel-section row-actions">
+          <button className="btn" onClick={() => duplicateSelected()}>{t("common.duplicate")}</button>
+          <button className="btn danger" onClick={() => deleteSelected()}>{t("common.delete")}</button>
+        </section>
+      </div>
+    );
+  }
 }
