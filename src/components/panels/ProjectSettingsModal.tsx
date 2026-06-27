@@ -7,6 +7,14 @@ import { CHAIR_ICONS } from "../../iconmap";
 import { Icon } from "../Icon";
 import { IconSelect } from "./IconSelect";
 import { ConfirmModal } from "./ConfirmModal";
+import {
+  usePwaUpdateReady,
+  usePwaCanInstall,
+  applyPwaUpdate,
+  checkForPwaUpdate,
+  promptInstall,
+  isPwaStandalone,
+} from "../../pwa";
 
 interface Props {
   onClose: () => void;
@@ -23,8 +31,20 @@ export function ProjectSettingsModal({ onClose }: Props) {
   const resetProject = useStore((s) => s.resetProject);
   const setOnboarded = useI18n((s) => s.setOnboarded);
 
+  const updateReady = usePwaUpdateReady();
+  const canInstall = usePwaCanInstall();
   const [confirmReset, setConfirmReset] = useState(false);
+  const [checking, setChecking] = useState(false);
   useEscClose(onClose, !confirmReset);
+
+  const onCheckUpdate = async () => {
+    setChecking(true);
+    try {
+      await checkForPwaUpdate();
+    } finally {
+      setChecking(false);
+    }
+  };
 
   return (
     <>
@@ -119,6 +139,38 @@ export function ProjectSettingsModal({ onClose }: Props) {
                 onChange={(e) => setSettings({ minSeatSpacing: Math.max(0.3, Number(e.target.value)) })}
               />
             </label>
+
+            {(isPwaStandalone || canInstall) && (
+              <div className="pwa-section">
+                <span className="field-caption">{t("pwa.section")}</span>
+                {isPwaStandalone ? (
+                  <>
+                    <div className="pwa-row">
+                      <span className="muted">
+                        {t("pwa.version")} {__APP_VERSION__}
+                      </span>
+                      {updateReady ? (
+                        <button className="btn primary" onClick={applyPwaUpdate}>
+                          <Icon name="import" /> {t("pwa.update")}
+                        </button>
+                      ) : (
+                        <button className="btn" onClick={onCheckUpdate} disabled={checking}>
+                          <Icon name="redo" /> {checking ? t("pwa.checking") : t("pwa.check")}
+                        </button>
+                      )}
+                    </div>
+                    {updateReady && <p className="muted pwa-hint">{t("pwa.updateAvailable")}</p>}
+                  </>
+                ) : (
+                  <div className="pwa-row">
+                    <span className="muted">{t("pwa.installHint")}</span>
+                    <button className="btn primary" onClick={promptInstall}>
+                      <Icon name="import" /> {t("pwa.install")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <button className="btn danger block" onClick={() => setConfirmReset(true)}>
               <Icon name="reset" /> {t("common.reset")}

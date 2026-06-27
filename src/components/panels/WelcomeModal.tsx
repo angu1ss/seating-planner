@@ -71,7 +71,13 @@ export function WelcomeModal({ onClose }: Props) {
               </button>
             ))}
           </div>
-          <img className="welcome-logo" src="/logo.svg" alt="" width={56} height={56} />
+          <img
+            className="welcome-logo"
+            src={`${import.meta.env.BASE_URL}logo.svg`}
+            alt=""
+            width={56}
+            height={56}
+          />
           <h2 id="welcome-title">{t("welcome.title")}</h2>
           <p>{t("welcome.subtitle")}</p>
         </div>

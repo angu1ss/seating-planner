@@ -944,3 +944,17 @@ button.editor-help,
 }
 .welcome-adv .btn.block { margin-top: 6px; }
 .welcome-foot { gap: 10px; }
+
+/* ---- App / update section in project settings ---- */
+.pwa-section {
+  margin: 4px 0 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.pwa-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pwa-hint { margin: 8px 0 0; font-size: 12px; color: var(--accent); }
