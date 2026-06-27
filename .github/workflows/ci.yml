@@ -2,11 +2,34 @@ name: CI
 
 on:
   push:
-    branches-ignore: [main] # main is covered by the deploy workflow
-  pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+      - run: npm install --no-audit --no-fund
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+      - run: npm run typecheck
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -14,8 +37,46 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+      - uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
       - run: npm install --no-audit --no-fund
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
       - run: npm test
-      - run: npm run build
+
+  build:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+      - run: npm install --no-audit --no-fund
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+      - run: npm run bundle
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs:
+      - lint
+      - test
+      - build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v6
+      - id: deployment
+        uses: actions/deploy-pages@v5

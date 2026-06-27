@@ -8,8 +8,6 @@ type Dict = Record<string, string>;
 
 const en: Dict = {
   "app.fullName": "Seating Planner",
-  "common.open": "Import",
-  "common.save": "Export",
   "common.reset": "Reset",
   "common.cancel": "Cancel",
   "common.close": "Close",
@@ -52,7 +50,6 @@ const en: Dict = {
   "export.byTable": "By table",
   "export.alphabetical": "Alphabetical",
   "export.empty": "empty",
-  "export.generating": "Generating…",
   "export.noSeated": "No seated guests yet.",
   "ctx.lock": "Lock",
   "ctx.unlock": "Unlock",
@@ -179,8 +176,6 @@ const en: Dict = {
   "table.welded": "Joined",
 
   "snake.band": "Band width, m",
-  "snake.sideA": "Side A",
-  "snake.sideB": "Side B",
   "snake.addNode": "Add node",
   "snake.removeNode": "Remove node",
   "snake.nodes": "Nodes",
@@ -242,8 +237,6 @@ const en: Dict = {
 
 const ru: Dict = {
   "app.fullName": "Планировщик рассадки",
-  "common.open": "Импорт",
-  "common.save": "Экспорт",
   "common.reset": "Сброс",
   "common.cancel": "Отмена",
   "common.close": "Закрыть",
@@ -286,7 +279,6 @@ const ru: Dict = {
   "export.byTable": "По столам",
   "export.alphabetical": "По алфавиту",
   "export.empty": "пусто",
-  "export.generating": "Генерация…",
   "export.noSeated": "Пока нет рассаженных гостей.",
   "ctx.lock": "Заблокировать",
   "ctx.unlock": "Разблокировать",
@@ -413,8 +405,6 @@ const ru: Dict = {
   "table.welded": "Соединён",
 
   "snake.band": "Ширина ленты, м",
-  "snake.sideA": "Сторона A",
-  "snake.sideB": "Сторона B",
   "snake.addNode": "Добавить узел",
   "snake.removeNode": "Убрать узел",
   "snake.nodes": "Узлы",

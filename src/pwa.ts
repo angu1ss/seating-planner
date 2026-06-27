@@ -91,9 +91,6 @@ export async function checkForPwaUpdate(): Promise<boolean> {
   return updateReady;
 }
 
-/** Whether the app is running with service-worker support active (not in dev). */
-export const pwaSupported = !import.meta.env.DEV && typeof navigator !== "undefined" && "serviceWorker" in navigator;
-
 /** True only when launched as an installed PWA (standalone window), not a browser tab. */
 function detectStandalone(): boolean {
   if (typeof window === "undefined") return false;

@@ -1,14 +1,16 @@
 {
   "name": "seating-planner",
   "private": true,
-  "version": "0.2.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "Web app for arranging tables and seating guests at events (weddings, banquets, conferences).",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "bundle": "vite build",
     "preview": "vite preview",
     "lint": "tsc -b --noEmit",
+    "typecheck": "tsc -b",
     "test": "node --import tsx --test src/geometry.test.ts"
   },
   "dependencies": {

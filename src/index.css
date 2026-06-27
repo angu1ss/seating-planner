@@ -71,6 +71,9 @@ body {
   border-radius: 7px;
   flex: none;
 }
+.canvas-loading {
+  flex: 1;
+}
 .app-title {
   font-weight: 700;
   font-size: 16px;

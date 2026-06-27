@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useStore, activeSheet } from "./store";
 import { useT, useI18n } from "./i18n";
 import { useMediaQuery } from "./utils/useMediaQuery";
@@ -25,7 +25,12 @@ type PrintJob =
   | { kind: "cards"; ctx: PrintContext };
 import { GuestsPanel } from "./components/panels/GuestsPanel";
 import { LegendModal } from "./components/panels/LegendModal";
-import { FloorCanvas } from "./components/canvas/FloorCanvas";
+
+// The Konva canvas (react-konva + konva) is the heaviest dependency — load it as its
+// own chunk so the toolbar/panels shell can paint first.
+const FloorCanvas = lazy(() =>
+  import("./components/canvas/FloorCanvas").then((m) => ({ default: m.FloorCanvas })),
+);
 
 export default function App() {
   const t = useT();
@@ -201,7 +206,9 @@ export default function App() {
           {propsPanel}
         </aside>
         <main className="canvas-area">
-          <FloorCanvas onHelp={() => setHelpOpen(true)} onLegend={() => setLegendOpen(true)} />
+          <Suspense fallback={<div className="canvas-loading" />}>
+            <FloorCanvas onHelp={() => setHelpOpen(true)} onLegend={() => setLegendOpen(true)} />
+          </Suspense>
         </main>
         {isDesktop && (
           <div
