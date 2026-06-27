@@ -1,0 +1,33 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Seating Planner">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#60a5fa" />
+      <stop offset="1" stop-color="#2563eb" />
+    </linearGradient>
+    <pattern id="gridFine" width="17.07" height="17.07" patternUnits="userSpaceOnUse">
+      <path d="M17.07 0 H0 V17.07" fill="none" stroke="#ffffff" stroke-width="1" stroke-opacity="0.075" />
+    </pattern>
+    <pattern id="gridCoarse" width="51.2" height="51.2" patternUnits="userSpaceOnUse">
+      <path d="M51.2 0 H0 V51.2" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.045" />
+    </pattern>
+    <clipPath id="round">
+      <rect width="512" height="512" rx="113" />
+    </clipPath>
+  </defs>
+  <rect width="512" height="512" rx="113" fill="url(#bg)" />
+  <g clip-path="url(#round)">
+    <rect width="512" height="512" fill="url(#gridFine)" />
+    <rect width="512" height="512" fill="url(#gridCoarse)" />
+  </g>
+  <g fill="#ffffff">
+    <circle cx="316" cy="132" r="28" fill="#f08a7a" />
+    <circle cx="196" cy="132" r="28" fill="#f08a7a" />
+    <circle cx="390" cy="225" r="28" />
+    <circle cx="122" cy="225" r="28" />
+    <circle cx="364" cy="342" r="28" />
+    <circle cx="148" cy="342" r="28" />
+    <circle cx="256" cy="394" r="28" />
+    <circle cx="256" cy="256" r="97" />
+  </g>
+  <circle cx="256" cy="256" r="58" fill="none" stroke="#3b82f6" stroke-width="7" />
+</svg>
