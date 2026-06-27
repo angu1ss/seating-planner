@@ -766,6 +766,8 @@ button.editor-help,
 .guest-row.clickable:hover { border-color: var(--accent); }
 .guest-info.clickable { cursor: pointer; }
 .icon-btn.small { padding: 5px 7px; font-size: 12px; }
+.rule-buttons { margin-top: 6px; }
+.rule-buttons .btn { padding: 8px 6px; font-size: 12.5px; }
 .seat-pick-list { margin-top: 10px; max-height: 320px; overflow-y: auto; }
 
 

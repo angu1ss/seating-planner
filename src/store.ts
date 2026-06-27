@@ -5,6 +5,7 @@ import { temporal } from "zundo";
 import type {
   ChairStyle,
   Guest,
+  GuestRole,
   PathPoint,
   ProjectMeta,
   ProjectState,
@@ -19,6 +20,7 @@ import type {
 import {
   CHAIR_OFFSET,
   CHAIR_RADIUS,
+  NEWLYWED_ROLES,
   OBJECT_PRESETS,
   SCHEMA_VERSION,
   createInitialState,
@@ -31,6 +33,7 @@ import {
   findWeldSnap,
   insertSnakeNode,
   normalizeSnakePath,
+  seatWorldPositions,
   tableOuterExtent,
 } from "./geometry";
 
@@ -182,6 +185,7 @@ export interface EditorState extends ProjectState {
   assignGuestToSeat: (guestId: string, tableId: string, index: number) => void;
   unassignGuest: (guestId: string) => void;
   setHighlightGuest: (id: string | null) => void;
+  seatNearNewlyweds: (roles: GuestRole[]) => void;
 
   addSheet: () => void;
   setActiveSheet: (id: string) => void;
@@ -272,6 +276,58 @@ export const useStore = create<EditorState>()(
         unassignGuest: (guestId) =>
           set((s) => ({ guests: s.guests.map((g) => (g.id === guestId ? { ...g, seat: null } : g)) })),
         setHighlightGuest: (id) => set({ highlightGuestId: id }),
+
+        seatNearNewlyweds: (roles) =>
+          set((s) => {
+            const seated = s.guests.filter((g) => g.seat);
+            const newlyweds = seated.filter((g) => NEWLYWED_ROLES.includes(g.role));
+            if (!newlyweds.length) return {};
+
+            // Seats in the halls that hold the newlyweds.
+            const newlywedTables = new Set(newlyweds.map((g) => g.seat!.tableId));
+            const sheets = s.sheets.filter((sh) => sh.tables.some((t) => newlywedTables.has(t.id)));
+            const positions = sheets.flatMap((sh) => seatWorldPositions(sh.tables));
+            const key = (tableId: string, index: number) => `${tableId}:${index}`;
+            const posMap = new Map(positions.map((p) => [key(p.tableId, p.index), p]));
+
+            const anchors = newlyweds
+              .map((g) => posMap.get(key(g.seat!.tableId, g.seat!.index)))
+              .filter((p): p is NonNullable<typeof p> => Boolean(p));
+            if (!anchors.length) return {};
+
+            const targets = s.guests.filter((g) => roles.includes(g.role));
+            if (!targets.length) return {};
+            const targetIds = new Set(targets.map((g) => g.id));
+
+            const occupantBySeat = new Map<string, Guest>();
+            for (const g of seated) occupantBySeat.set(key(g.seat!.tableId, g.seat!.index), g);
+
+            // Free seats, or seats held by a target we're about to move; never a newlywed's seat.
+            const candidates = positions.filter((p) => {
+              const occ = occupantBySeat.get(key(p.tableId, p.index));
+              if (!occ) return true;
+              if (NEWLYWED_ROLES.includes(occ.role)) return false;
+              return targetIds.has(occ.id);
+            });
+            const distOf = (p: { x: number; y: number }) =>
+              Math.min(...anchors.map((a) => Math.hypot(a.x - p.x, a.y - p.y)));
+            candidates.sort((a, b) => distOf(a) - distOf(b));
+
+            // Witnesses get the very closest seats, then parents.
+            const rank = (r: GuestRole) => (r === "witness" ? 0 : 1);
+            const ordered = targets.slice().sort((a, b) => rank(a.role) - rank(b.role));
+
+            const used = new Set<string>();
+            const assign = new Map<string, { tableId: string; index: number }>();
+            for (const g of ordered) {
+              const seat = candidates.find((p) => !used.has(key(p.tableId, p.index)));
+              if (!seat) break;
+              used.add(key(seat.tableId, seat.index));
+              assign.set(g.id, { tableId: seat.tableId, index: seat.index });
+            }
+            if (!assign.size) return {};
+            return { guests: s.guests.map((g) => (assign.has(g.id) ? { ...g, seat: assign.get(g.id)! } : g)) };
+          }),
 
         addSheet: () =>
           set((s) => {

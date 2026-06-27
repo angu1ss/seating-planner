@@ -442,6 +442,34 @@ function pointSegDist(p: PathPoint, a: PathPoint, b: PathPoint): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
+/** World position of every chair across `tables` (handles rect, ellipse, snake, welds). */
+export function seatWorldPositions(tables: TableModel[]): { tableId: string; index: number; x: number; y: number }[] {
+  const groups = new Map<string, TableModel[]>();
+  for (const t of tables) {
+    if (!t.groupId) continue;
+    const arr = groups.get(t.groupId);
+    if (arr) arr.push(t);
+    else groups.set(t.groupId, [t]);
+  }
+  const out: { tableId: string; index: number; x: number; y: number }[] = [];
+  for (const t of tables) {
+    const welded = t.groupId ? weldedSidesFor(t, groups.get(t.groupId)!) : [];
+    const local = t.shape === "snake" ? computeSnakeChairs(t) : computeChairs(t, welded);
+    const rad = t.shape === "snake" ? 0 : (t.rotation * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    for (let i = 0; i < local.length; i++) {
+      out.push({
+        tableId: t.id,
+        index: i,
+        x: t.x + local[i].x * cos - local[i].y * sin,
+        y: t.y + local[i].x * sin + local[i].y * cos,
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * Chairs for a snake table (local coords, relative to table centre).
  *

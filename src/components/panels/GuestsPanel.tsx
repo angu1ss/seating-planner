@@ -12,6 +12,7 @@ import {
   sexLabelKey,
   SEX_COLOR,
   NEUTRAL_SEAT,
+  NEWLYWED_ROLES,
   initials,
 } from "../../constants";
 import { ROLE_ICONS, AGE_ICONS, FEATURE_ICONS, SEX_ICONS } from "../../iconmap";
@@ -41,9 +42,12 @@ export function GuestsPanel({ onClose }: { onClose?: () => void }) {
   const updateGuest = useStore((s) => s.updateGuest);
   const removeGuest = useStore((s) => s.removeGuest);
   const unassign = useStore((s) => s.unassignGuest);
+  const seatNearNewlyweds = useStore((s) => s.seatNearNewlyweds);
   const highlightGuestId = useStore((s) => s.highlightGuestId);
   const setHighlight = useStore((s) => s.setHighlightGuest);
   const chairStyle = useStore((s) => s.settings.chairStyle);
+
+  const newlywedsSeated = guests.some((g) => NEWLYWED_ROLES.includes(g.role) && g.seat);
 
   const [form, setForm] = useState<Form>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -214,6 +218,25 @@ export function GuestsPanel({ onClose }: { onClose?: () => void }) {
               )}
             </div>
           </>
+        )}
+      </section>
+
+      <section className="panel-section">
+        <span className="field-caption">{t("rules.title")}</span>
+        {newlywedsSeated ? (
+          <div className="row-actions rule-buttons">
+            <button className="btn" onClick={() => seatNearNewlyweds(["witness"])}>
+              {t("rules.witnesses")}
+            </button>
+            <button className="btn" onClick={() => seatNearNewlyweds(["parent"])}>
+              {t("rules.parents")}
+            </button>
+            <button className="btn" onClick={() => seatNearNewlyweds(["witness", "parent"])}>
+              {t("rules.both")}
+            </button>
+          </div>
+        ) : (
+          <p className="muted">{t("rules.needNewlyweds")}</p>
         )}
       </section>
 

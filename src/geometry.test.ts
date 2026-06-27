@@ -10,6 +10,7 @@ import {
   insertSnakeNode,
   computeSnakeChairs,
   tableOuterExtent,
+  seatWorldPositions,
 } from "./geometry";
 
 function rect(over: Partial<TableModel> = {}): TableModel {
@@ -154,4 +155,14 @@ test("tableOuterExtent: snake extent covers the whole band", () => {
   const e = tableOuterExtent(snake());
   assert.ok(e.rx > 3 && e.rx < 4.5, `rx=${e.rx}`);
   assert.ok(e.ry > 0.9, `ry=${e.ry}`);
+});
+
+test("seatWorldPositions: one position per chair, clustered around the table", () => {
+  const tbl = rect({ id: "t1", x: 2, y: 2, w: 1.8, h: 0.8, seatCount: 4 });
+  const pos = seatWorldPositions([tbl]);
+  assert.equal(pos.length, 4);
+  for (const p of pos) {
+    assert.equal(p.tableId, "t1");
+    assert.ok(Math.hypot(p.x - 2, p.y - 2) < 1.6, `seat too far: ${p.x},${p.y}`);
+  }
 });

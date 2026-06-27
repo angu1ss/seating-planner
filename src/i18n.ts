@@ -74,6 +74,12 @@ const en: Dict = {
   "seat.tabAll": "All",
   "seat.empty": "No guests to pick.",
 
+  "rules.title": "Seat near the newlyweds",
+  "rules.witnesses": "Witnesses",
+  "rules.parents": "Parents",
+  "rules.both": "Both",
+  "rules.needNewlyweds": "Seat the bride & groom first, then auto-place their entourage.",
+
   "event.type": "Event type",
   "event.wedding": "Wedding",
 
@@ -260,6 +266,12 @@ const ru: Dict = {
   "seat.tabUnseated": "Без места",
   "seat.tabAll": "Все",
   "seat.empty": "Нет гостей для выбора.",
+
+  "rules.title": "Рассадка у молодожёнов",
+  "rules.witnesses": "Свидетелей",
+  "rules.parents": "Родителей",
+  "rules.both": "Оба",
+  "rules.needNewlyweds": "Сначала посадите молодожёнов — затем авто-рассадим их окружение.",
 
   "event.type": "Тип события",
   "event.wedding": "Свадьба",
