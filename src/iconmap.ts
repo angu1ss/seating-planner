@@ -46,6 +46,7 @@ import {
   faKeyboard,
   faBezierCurve,
   faFilePdf,
+  faFileCode,
   faRingsWedding,
 } from "@fortawesome/pro-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
@@ -87,7 +88,8 @@ export type UiIconName =
   | "guests"
   | "chevron"
   | "keyboard"
-  | "pdf";
+  | "pdf"
+  | "code";
 
 export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   import: faFileImport,
@@ -116,6 +118,7 @@ export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   chevron: faChevronDown,
   keyboard: faKeyboard,
   pdf: faFilePdf,
+  code: faFileCode,
 };
 
 export const EVENT_ICONS: Record<EventType, IconDefinition> = {

@@ -3,7 +3,13 @@ import { useT } from "../../i18n";
 import { Icon } from "../Icon";
 import { AppActions } from "./AppActions";
 
-export function SettingsMenu({ onProjectSettings }: { onProjectSettings: () => void }) {
+export function SettingsMenu({
+  onProjectSettings,
+  onExport,
+}: {
+  onProjectSettings: () => void;
+  onExport: () => void;
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -38,8 +44,18 @@ export function SettingsMenu({ onProjectSettings }: { onProjectSettings: () => v
 
       {open && (
         <div className="menu" role="menu">
-          <AppActions layout="menu" onAfter={() => setOpen(false)} />
+          <AppActions layout="menu" />
           <div className="menu-sep" />
+          <button
+            className="menu-item"
+            onClick={() => {
+              setOpen(false);
+              onExport();
+            }}
+          >
+            <Icon name="export" />
+            <span>{t("export.title")}…</span>
+          </button>
           <button
             className="menu-item"
             onClick={() => {

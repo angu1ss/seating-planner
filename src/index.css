@@ -65,6 +65,12 @@ body {
   gap: 8px;
 }
 
+.app-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex: none;
+}
 .app-title {
   font-weight: 700;
   font-size: 16px;
@@ -1012,11 +1018,13 @@ button.editor-help,
   .export-grid { grid-template-columns: 1fr; }
 }
 
-/* ---- Print: floor plan, one hall per page (Ctrl/Cmd+P) ---- */
+/* ---- Print views (plan / guest list / escort cards). @page is injected per job. ---- */
 .print-root { display: none; }
 @media print {
   .app { display: none !important; }
-  .print-root { display: block; }
+  .print-root { display: block; color: #14233a; background: #fff; font-family: inherit; }
+
+  /* Floor plan: one hall image per page. */
   .print-page {
     width: 100%;
     min-height: 100vh;
@@ -1031,7 +1039,41 @@ button.editor-help,
   .print-page:last-child { page-break-after: auto; break-after: auto; }
   .print-title { margin: 0 0 6mm; font-size: 14pt; font-weight: 600; }
   .print-page img { max-width: 100%; max-height: 88vh; object-fit: contain; }
-  @page { size: A4 landscape; margin: 10mm; }
+
+  /* Guest list document. */
+  .print-doc { font-size: 11pt; line-height: 1.4; }
+  .print-head { margin-bottom: 8mm; }
+  .print-head h1 { margin: 0; font-size: 18pt; }
+  .print-head p { margin: 2mm 0 0; color: #6a7180; font-size: 10.5pt; }
+  .print-doc h2 { font-size: 13pt; margin: 6mm 0 3mm; border-bottom: 1px solid #d7dae2; padding-bottom: 1.5mm; }
+  .print-hall { font-size: 11.5pt; color: #2563eb; margin: 4mm 0 2mm; }
+  .print-block { margin: 0 0 3mm; page-break-inside: avoid; }
+  .print-block h4 { margin: 0 0 1mm; font-size: 11.5pt; }
+  .print-count { color: #8a909c; font-weight: 400; font-size: 10pt; }
+  .print-block ul { margin: 0; padding-left: 6mm; }
+  .print-block li { margin: 0.5mm 0; }
+  .print-empty { margin: 0; color: #9a9ea6; }
+  .print-break-before { page-break-before: always; break-before: page; }
+  .print-alpha { width: 100%; border-collapse: collapse; }
+  .print-alpha td { padding: 1mm 0; border-bottom: 1px solid #eceef2; }
+  .print-where { text-align: right; color: #6a7180; }
+
+  /* Escort cards: a grid of cut-out cards. */
+  .print-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .print-card {
+    box-sizing: border-box;
+    height: 52mm;
+    border: 0.3mm dashed #c4c8d0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3mm;
+    padding: 6mm;
+    page-break-inside: avoid;
+  }
+  .print-card-name { font-size: 16pt; font-weight: 700; text-align: center; }
+  .print-card-table { font-size: 11pt; color: #6a7180; text-align: center; }
 }
 
 /* ---- App / update section in project settings ---- */

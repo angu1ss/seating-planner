@@ -1,7 +1,7 @@
 {
   "id": "./",
   "name": "Seating Planner",
-  "short_name": "Seating",
+  "short_name": "Seating Planner",
   "description": "Arrange tables and seat guests at weddings, banquets and events.",
   "start_url": "./",
   "scope": "./",

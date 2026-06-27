@@ -15,6 +15,14 @@ import { ProjectSettingsModal } from "./components/panels/ProjectSettingsModal";
 import { WelcomeModal } from "./components/panels/WelcomeModal";
 import { ExportModal } from "./components/panels/ExportModal";
 import { preparePlanPages, type PlanPage } from "./export/plan";
+import { buildPrintContext, type PrintContext } from "./print/context";
+import { PrintGuestList } from "./print/PrintGuestList";
+import { PrintEscortCards } from "./print/PrintEscortCards";
+
+type PrintJob =
+  | { kind: "plan"; pages: PlanPage[] }
+  | { kind: "guests"; ctx: PrintContext }
+  | { kind: "cards"; ctx: PrintContext };
 import { GuestsPanel } from "./components/panels/GuestsPanel";
 import { LegendModal } from "./components/panels/LegendModal";
 import { FloorCanvas } from "./components/canvas/FloorCanvas";
@@ -22,6 +30,7 @@ import { FloorCanvas } from "./components/canvas/FloorCanvas";
 export default function App() {
   const t = useT();
   const theme = useI18n((s) => s.theme);
+  const lang = useI18n((s) => s.lang);
   const onboarded = useI18n((s) => s.onboarded);
   const setOnboarded = useI18n((s) => s.setOnboarded);
   const projectName = useStore((s) => s.project.name);
@@ -36,8 +45,37 @@ export default function App() {
   const [guestsOpen, setGuestsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [printPages, setPrintPages] = useState<PlanPage[] | null>(null);
+  const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const printing = useRef(false);
+
+  const runPlanPrint = async () => {
+    if (printing.current) return;
+    printing.current = true;
+    try {
+      const pages = await preparePlanPages((i) => `${t("left.hall")} ${i + 1}`);
+      if (pages.length) setPrintJob({ kind: "plan", pages });
+      else printing.current = false;
+    } catch {
+      printing.current = false;
+    }
+  };
+  const printGuests = () => {
+    if (printing.current) return;
+    printing.current = true;
+    setPrintJob({ kind: "guests", ctx: buildPrintContext(t, lang) });
+  };
+  const printCards = () => {
+    const ctx = buildPrintContext(t, lang);
+    if (!ctx.guests.some((g) => g.seat)) {
+      alert(t("export.noSeated"));
+      return;
+    }
+    if (printing.current) return;
+    printing.current = true;
+    setPrintJob({ kind: "cards", ctx });
+  };
+  const planPrintRef = useRef(runPlanPrint);
+  planPrintRef.current = runPlanPrint;
 
   const isDesktop = useMediaQuery("(min-width: 721px)");
   const [guestsWidth, setGuestsWidth] = useState(() => {
@@ -97,26 +135,17 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "p") return;
       e.preventDefault();
-      if (printing.current) return;
-      printing.current = true;
-      preparePlanPages((i) => `${t("left.hall")} ${i + 1}`)
-        .then((pages) => {
-          if (pages.length) setPrintPages(pages);
-          else printing.current = false;
-        })
-        .catch(() => {
-          printing.current = false;
-        });
+      void planPrintRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [t]);
+  }, []);
 
-  // Once the print pages render, open the browser print dialog, then clean up.
+  // Once a print job renders, open the browser print dialog, then clean up.
   useEffect(() => {
-    if (!printPages) return;
+    if (!printJob) return;
     const done = () => {
-      setPrintPages(null);
+      setPrintJob(null);
       printing.current = false;
     };
     window.addEventListener("afterprint", done, { once: true });
@@ -125,7 +154,7 @@ export default function App() {
       window.clearTimeout(id);
       window.removeEventListener("afterprint", done);
     };
-  }, [printPages]);
+  }, [printJob]);
 
   useEffect(() => {
     const name = projectName.trim() || t("project.untitled");
@@ -200,17 +229,32 @@ export default function App() {
       {helpOpen && <ShortcutsModal onClose={() => setHelpOpen(false)} />}
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
       {settingsOpen && <ProjectSettingsModal onClose={() => setSettingsOpen(false)} />}
-      {exportOpen && <ExportModal onClose={() => setExportOpen(false)} />}
+      {exportOpen && (
+        <ExportModal
+          onClose={() => setExportOpen(false)}
+          onPrintPlan={runPlanPrint}
+          onPrintGuests={printGuests}
+          onPrintCards={printCards}
+        />
+      )}
       {welcomeOpen && <WelcomeModal onClose={closeWelcome} />}
     </div>
-    {printPages && (
+    {printJob && (
       <div className="print-root" aria-hidden="true">
-        {printPages.map((p, i) => (
-          <section className="print-page" key={i}>
-            <h2 className="print-title">{p.name}</h2>
-            <img src={p.dataUrl} alt="" />
-          </section>
-        ))}
+        <style>
+          {printJob.kind === "plan"
+            ? "@page{size:A4 landscape;margin:10mm}"
+            : "@page{size:A4 portrait;margin:12mm}"}
+        </style>
+        {printJob.kind === "plan" &&
+          printJob.pages.map((p, i) => (
+            <section className="print-page" key={i}>
+              <h2 className="print-title">{p.name}</h2>
+              <img src={p.dataUrl} alt="" />
+            </section>
+          ))}
+        {printJob.kind === "guests" && <PrintGuestList ctx={printJob.ctx} />}
+        {printJob.kind === "cards" && <PrintEscortCards ctx={printJob.ctx} />}
       </div>
     )}
     </>

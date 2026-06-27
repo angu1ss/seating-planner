@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useStore, activeSheet } from "../../store";
 import type { EventType } from "../../types";
 import { useT, useI18n } from "../../i18n";
 import { useEscClose } from "../../utils/useEscClose";
+import { readJSONFile } from "../../utils/file";
 import { CHAIR_ICONS, EVENT_ICONS } from "../../iconmap";
 import { Icon } from "../Icon";
 import { IconSelect } from "./IconSelect";
@@ -29,13 +30,28 @@ export function ProjectSettingsModal({ onClose }: Props) {
   const venue = useStore((s) => activeSheet(s).venue);
   const setVenue = useStore((s) => s.setVenue);
   const resetProject = useStore((s) => s.resetProject);
+  const loadDocument = useStore((s) => s.loadDocument);
   const setOnboarded = useI18n((s) => s.setOnboarded);
 
   const updateReady = usePwaUpdateReady();
   const canInstall = usePwaCanInstall();
   const [confirmReset, setConfirmReset] = useState(false);
   const [checking, setChecking] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   useEscClose(onClose, !confirmReset);
+
+  const onImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      loadDocument(await readJSONFile(file));
+      onClose();
+    } catch (err) {
+      alert(`${t("common.importError")}${(err as Error).message}`);
+    } finally {
+      e.target.value = "";
+    }
+  };
 
   const onCheckUpdate = async () => {
     setChecking(true);
@@ -172,9 +188,21 @@ export function ProjectSettingsModal({ onClose }: Props) {
               </div>
             )}
 
-            <button className="btn danger block" onClick={() => setConfirmReset(true)}>
-              <Icon name="reset" /> {t("common.reset")}
-            </button>
+            <div className="row-actions">
+              <button className="btn" onClick={() => fileRef.current?.click()}>
+                <Icon name="import" /> {t("settings.import")}
+              </button>
+              <button className="btn danger" onClick={() => setConfirmReset(true)}>
+                <Icon name="reset" /> {t("common.reset")}
+              </button>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={onImport}
+              className="hidden"
+            />
           </div>
         </div>
       </div>

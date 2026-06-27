@@ -29,7 +29,14 @@ export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, sh
         <button className={`icon-btn ${showLeftToggle ? "" : "only-mobile"}`} onClick={onToggleLeft} aria-label="menu">
           ☰
         </button>
-        <span className="app-title">{t("app.name")}</span>
+        <img
+          className="app-logo only-desktop"
+          src={`${import.meta.env.BASE_URL}logo.svg`}
+          alt=""
+          width={26}
+          height={26}
+        />
+        <span className="app-title">{t("app.fullName")}</span>
         <div className="project-name-display only-desktop">
           <Icon icon={EVENT_ICONS[project.eventType]} size={15} />
           {editing ? (
@@ -62,17 +69,13 @@ export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, sh
         >
           <Icon name="guests" />
         </button>
-        <button
-          className="icon-btn"
-          onClick={onExport}
-          title={t("export.title")}
-          aria-label={t("export.title")}
-        >
-          <Icon name="pdf" />
-        </button>
         {wide ? (
           <>
             <AppActions layout="bar" />
+            <button className="btn" onClick={onExport} title={t("export.title")} aria-label={t("export.title")}>
+              <Icon name="export" />
+              <span className="label">{t("export.title")}</span>
+            </button>
             <button
               className="icon-btn"
               onClick={onSettings}
@@ -83,7 +86,7 @@ export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, sh
             </button>
           </>
         ) : (
-          <SettingsMenu onProjectSettings={onSettings} />
+          <SettingsMenu onProjectSettings={onSettings} onExport={onExport} />
         )}
       </div>
     </header>
