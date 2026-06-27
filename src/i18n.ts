@@ -18,8 +18,18 @@ const en: Dict = {
   "common.redo": "Redo",
   "project.untitled": "Untitled project",
   "project.name": "Project name",
+  "project.namePlaceholder": "e.g. Anna & Ivan's wedding",
+  "project.date": "Date",
+  "project.note": "Description",
+  "project.notePlaceholder": "Venue, number of guests, any notes…",
   "settings.title": "Project settings",
   "settings.gear": "Settings",
+  "welcome.title": "Welcome!",
+  "welcome.subtitle": "Let's set up your seating plan. You can change everything later.",
+  "welcome.advanced": "Advanced settings",
+  "welcome.import": "Import project from file",
+  "welcome.start": "Create project",
+  "welcome.skip": "Skip",
   "sheet.add": "Add hall",
   "sheet.name": "Hall",
   "sheet.rename": "Rename hall",
@@ -211,8 +221,18 @@ const ru: Dict = {
   "common.redo": "Повторить",
   "project.untitled": "Новый проект",
   "project.name": "Название проекта",
+  "project.namePlaceholder": "напр. свадьба Анны и Ивана",
+  "project.date": "Дата",
+  "project.note": "Описание",
+  "project.notePlaceholder": "Площадка, число гостей, заметки…",
   "settings.title": "Настройки проекта",
   "settings.gear": "Настройки",
+  "welcome.title": "Добро пожаловать!",
+  "welcome.subtitle": "Давайте настроим вашу рассадку. Всё можно изменить позже.",
+  "welcome.advanced": "Расширенные настройки",
+  "welcome.import": "Импортировать проект из файла",
+  "welcome.start": "Создать проект",
+  "welcome.skip": "Пропустить",
   "sheet.add": "Добавить зал",
   "sheet.name": "Зал",
   "sheet.rename": "Переименовать зал",
@@ -418,6 +438,9 @@ interface AppPrefsState {
   setLang: (lang: Lang) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  /** Whether the first-run welcome flow has been completed/dismissed. */
+  onboarded: boolean;
+  setOnboarded: (v: boolean) => void;
 }
 
 export const useI18n = create<AppPrefsState>()(
@@ -427,6 +450,8 @@ export const useI18n = create<AppPrefsState>()(
       setLang: (lang) => set({ lang }),
       theme: detectTheme(),
       setTheme: (theme) => set({ theme }),
+      onboarded: false,
+      setOnboarded: (onboarded) => set({ onboarded }),
     }),
     { name: "seating-planner:lang" },
   ),

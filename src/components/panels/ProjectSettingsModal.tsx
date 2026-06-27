@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore, activeSheet } from "../../store";
 import type { EventType } from "../../types";
-import { useT } from "../../i18n";
+import { useT, useI18n } from "../../i18n";
 import { useEscClose } from "../../utils/useEscClose";
 import { CHAIR_ICONS } from "../../iconmap";
 import { Icon } from "../Icon";
@@ -21,6 +21,7 @@ export function ProjectSettingsModal({ onClose }: Props) {
   const venue = useStore((s) => activeSheet(s).venue);
   const setVenue = useStore((s) => s.setVenue);
   const resetProject = useStore((s) => s.resetProject);
+  const setOnboarded = useI18n((s) => s.setOnboarded);
 
   const [confirmReset, setConfirmReset] = useState(false);
   useEscClose(onClose, !confirmReset);
@@ -45,15 +46,34 @@ export function ProjectSettingsModal({ onClose }: Props) {
                 onChange={(e) => setProjectMeta({ name: e.target.value })}
               />
             </label>
-            <div className="field">
-              <span>{t("event.type")}</span>
-              <IconSelect
-                ariaLabel={t("event.type")}
-                value={project.eventType}
-                onChange={(v) => setProjectMeta({ eventType: v as EventType })}
-                options={[{ value: "wedding", label: t("event.wedding") }]}
-              />
+            <div className="field-2col">
+              <div className="field">
+                <span>{t("event.type")}</span>
+                <IconSelect
+                  ariaLabel={t("event.type")}
+                  value={project.eventType}
+                  onChange={(v) => setProjectMeta({ eventType: v as EventType })}
+                  options={[{ value: "wedding", label: t("event.wedding") }]}
+                />
+              </div>
+              <label className="field">
+                <span>{t("project.date")}</span>
+                <input
+                  type="date"
+                  value={project.date}
+                  onChange={(e) => setProjectMeta({ date: e.target.value })}
+                />
+              </label>
             </div>
+            <label className="field">
+              <span>{t("project.note")}</span>
+              <textarea
+                rows={2}
+                value={project.note}
+                placeholder={t("project.notePlaceholder")}
+                onChange={(e) => setProjectMeta({ note: e.target.value })}
+              />
+            </label>
 
             <div className="field">
               <span>{t("left.gridStep")}</span>
@@ -115,6 +135,7 @@ export function ProjectSettingsModal({ onClose }: Props) {
           danger
           onConfirm={() => {
             resetProject();
+            setOnboarded(false);
             onClose();
           }}
           onClose={() => setConfirmReset(false)}

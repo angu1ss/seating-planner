@@ -12,6 +12,7 @@ import { AddTableModal } from "./components/panels/AddTableModal";
 import { AddObjectModal } from "./components/panels/AddObjectModal";
 import { ShortcutsModal } from "./components/panels/ShortcutsModal";
 import { ProjectSettingsModal } from "./components/panels/ProjectSettingsModal";
+import { WelcomeModal } from "./components/panels/WelcomeModal";
 import { GuestsPanel } from "./components/panels/GuestsPanel";
 import { LegendModal } from "./components/panels/LegendModal";
 import { FloorCanvas } from "./components/canvas/FloorCanvas";
@@ -19,6 +20,8 @@ import { FloorCanvas } from "./components/canvas/FloorCanvas";
 export default function App() {
   const t = useT();
   const theme = useI18n((s) => s.theme);
+  const onboarded = useI18n((s) => s.onboarded);
+  const setOnboarded = useI18n((s) => s.setOnboarded);
   const projectName = useStore((s) => s.project.name);
   const selectedIds = useStore((s) => s.selectedIds);
   const tables = useStore((s) => activeSheet(s).tables);
@@ -29,6 +32,7 @@ export default function App() {
   const [legendOpen, setLegendOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guestsOpen, setGuestsOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
 
   const isDesktop = useMediaQuery("(min-width: 721px)");
   const [guestsWidth, setGuestsWidth] = useState(() => {
@@ -61,6 +65,27 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  // Show the welcome flow whenever the app isn't onboarded — first run, or after a full
+  // reset (which clears the flag). Existing non-empty projects are marked onboarded silently.
+  useEffect(() => {
+    if (onboarded) {
+      setWelcomeOpen(false);
+      return;
+    }
+    const s = useStore.getState();
+    const isEmpty =
+      !s.project.name.trim() &&
+      s.guests.length === 0 &&
+      s.sheets.every((sh) => sh.tables.length === 0 && sh.objects.length === 0);
+    if (isEmpty) setWelcomeOpen(true);
+    else setOnboarded(true);
+  }, [onboarded, setOnboarded]);
+
+  const closeWelcome = () => {
+    setOnboarded(true);
+    setWelcomeOpen(false);
+  };
 
   useEffect(() => {
     const name = projectName.trim() || t("project.untitled");
@@ -133,6 +158,7 @@ export default function App() {
       {helpOpen && <ShortcutsModal onClose={() => setHelpOpen(false)} />}
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
       {settingsOpen && <ProjectSettingsModal onClose={() => setSettingsOpen(false)} />}
+      {welcomeOpen && <WelcomeModal onClose={closeWelcome} />}
     </div>
   );
 }
