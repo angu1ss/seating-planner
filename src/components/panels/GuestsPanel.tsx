@@ -70,6 +70,7 @@ export function GuestsPanel({ onClose }: { onClose?: () => void }) {
     setForm(EMPTY);
     setEditingId(null);
     setAdding(false);
+    setHighlight(null);
   };
 
   const startAdd = () => {

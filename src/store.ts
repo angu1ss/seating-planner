@@ -725,7 +725,7 @@ export const useStore = create<EditorState>()(
             const sh = activeSheet(s);
             return { selectedIds: [...sh.tables.map((t) => t.id), ...sh.objects.map((o) => o.id)] };
           }),
-        clearSelection: () => set({ selectedIds: [] }),
+        clearSelection: () => set({ selectedIds: [], highlightGuestId: null }),
 
         rotateSelection: (deg) =>
           set((s) => {

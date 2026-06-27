@@ -1,15 +1,13 @@
 import { useEffect, useRef } from "react";
-import { Group, Rect, Ellipse, Text, Path, Transformer } from "react-konva";
+import { Group, Rect, Ellipse, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, Side, TableModel } from "../../types";
 import { computeChairs, isTight } from "../../geometry";
 import type { Palette } from "../../theme";
 import { useT } from "../../i18n";
-import { LOCK_BODY, LOCK_SHACKLE_CLOSED } from "../icons";
 import { Chair, type Occupant } from "./Chair";
-
-const LOCK_ICON = 14;
+import { LockBadge } from "./LockBadge";
 
 interface TransformPatch {
   w?: number;
@@ -215,24 +213,7 @@ export function TableNode({
         listening={false}
       />
 
-      {table.locked && (
-        <Group
-          x={wpx / 2 - LOCK_ICON - 3}
-          y={-hpx / 2 + 3}
-          scaleX={LOCK_ICON / 16}
-          scaleY={LOCK_ICON / 16}
-          listening={false}
-        >
-          <Path data={LOCK_BODY} stroke={palette.labelText} strokeWidth={1.8} lineCap="round" lineJoin="round" />
-          <Path
-            data={LOCK_SHACKLE_CLOSED}
-            stroke={palette.labelText}
-            strokeWidth={1.8}
-            lineCap="round"
-            lineJoin="round"
-          />
-        </Group>
-      )}
+      {table.locked && <LockBadge x={wpx / 2} y={-hpx / 2} />}
     </Group>
       {editable && (
         <Transformer

@@ -4,8 +4,9 @@ import { useT } from "../../i18n";
 import { useEscClose } from "../../utils/useEscClose";
 import { useDraggablePanel } from "../../utils/useDraggablePanel";
 import { TABLE_PRESETS, presetLabel } from "../../constants";
+import { maxComfortableSeats } from "../../geometry";
 import { CHAIR_ICONS, SHAPE_ICONS } from "../../iconmap";
-import type { ChairStyle, TableShape } from "../../types";
+import type { ChairStyle, TableModel, TableShape } from "../../types";
 import { Icon } from "../Icon";
 import { IconSelect } from "./IconSelect";
 
@@ -16,12 +17,23 @@ interface Props {
 export function AddTableModal({ onClose }: Props) {
   const t = useT();
   const addTablesFrom = useStore((s) => s.addTablesFrom);
+  const minSpacing = useStore((s) => s.settings.minSeatSpacing);
+
+  // Prefill the seat count so it never starts above what fits comfortably.
+  const comfortableSeats = (sh: TableShape, ww: number, hh: number, preset: number) => {
+    if (sh === "snake") return preset;
+    const probe = { shape: sh, w: ww, h: hh, disabledSides: [] } as unknown as TableModel;
+    const max = maxComfortableSeats(probe, minSpacing);
+    return Math.min(preset, max);
+  };
 
   const first = TABLE_PRESETS[0];
   const [shape, setShape] = useState<TableShape>(first.shape);
   const [w, setW] = useState(first.w);
   const [h, setH] = useState(first.h);
-  const [seatCount, setSeatCount] = useState(first.seatCount);
+  const [seatCount, setSeatCount] = useState(() =>
+    comfortableSeats(first.shape, first.w, first.h, first.seatCount),
+  );
   const [chairStyle, setChairStyle] = useState<"inherit" | ChairStyle>("inherit");
   const [name, setName] = useState("");
   const [count, setCount] = useState(1);
@@ -37,7 +49,7 @@ export function AddTableModal({ onClose }: Props) {
     setShape(p.shape);
     setW(p.w);
     setH(p.h);
-    setSeatCount(p.seatCount);
+    setSeatCount(comfortableSeats(p.shape, p.w, p.h, p.seatCount));
   };
 
   const submit = () => {

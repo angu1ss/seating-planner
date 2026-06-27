@@ -99,6 +99,7 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   const [pickSeat, setPickSeat] = useState<{ tableId: string; index: number } | null>(null);
   const didFit = useRef(false);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
+  const pinchDist = useRef<number | null>(null);
   const groupDrag = useRef<{
     draggedId: string;
     starts: Record<string, { x: number; y: number }>;
@@ -211,6 +212,31 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     } else {
       zoomAtPointer(dy, pointer);
     }
+  };
+
+  // Two-finger pinch-to-zoom on touch devices.
+  const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
+    const touches = e.evt.touches;
+    if (touches.length !== 2) return;
+    e.evt.preventDefault();
+    e.target.getStage()?.stopDrag();
+    const a = touches[0];
+    const b = touches[1];
+    const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+    const rect = containerRef.current?.getBoundingClientRect();
+    const cx = (a.clientX + b.clientX) / 2 - (rect?.left ?? 0);
+    const cy = (a.clientY + b.clientY) / 2 - (rect?.top ?? 0);
+    if (pinchDist.current && pinchDist.current > 0) {
+      const oldScale = scale;
+      const newScale = clamp((oldScale * dist) / pinchDist.current, MIN_SCALE, MAX_SCALE);
+      const pointTo = { x: (cx - pos.x) / oldScale, y: (cy - pos.y) / oldScale };
+      setScale(newScale);
+      setPos({ x: cx - pointTo.x * newScale, y: cy - pointTo.y * newScale });
+    }
+    pinchDist.current = dist;
+  };
+  const handleTouchEnd = () => {
+    pinchDist.current = null;
   };
 
   const handleMouseDown = (e: KonvaEventObject<MouseEvent>) => {
@@ -681,6 +707,8 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
         y={pos.y}
         draggable={panMode}
         onWheel={handleWheel}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={finishMarquee}

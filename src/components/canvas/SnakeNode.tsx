@@ -1,13 +1,11 @@
-import { Group, Circle, Line, Text, Path } from "react-konva";
+import { Group, Circle, Line, Text } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, TableModel } from "../../types";
 import { computeSnakeChairs, snakeCenterline, snakeLength } from "../../geometry";
 import type { Palette } from "../../theme";
 import { useT } from "../../i18n";
-import { LOCK_BODY, LOCK_SHACKLE_CLOSED } from "../icons";
 import { Chair, type Occupant } from "./Chair";
-
-const LOCK_ICON = 14;
+import { LockBadge } from "./LockBadge";
 
 interface Props {
   table: TableModel;
@@ -83,6 +81,18 @@ export function SnakeNode({
   const borderPx = selected ? 3 : tooClose || tight ? 2.5 : 1.5;
   const haloPx = 0.14 * ppm; // podium ring width, meters → px
   const label = table.name.trim() || `${t("table.word")} ${table.number}`;
+
+  // Lock badge just past the band's right-most tip.
+  let rx = -Infinity;
+  let ry = 0;
+  for (const p of dense) {
+    if (p.x > rx) {
+      rx = p.x;
+      ry = p.y;
+    }
+  }
+  const lockX = Number.isFinite(rx) ? (rx + table.h / 2) * ppm : 0;
+  const lockY = ry * ppm;
 
   const handleSelect = (e: KonvaEventObject<Event>) => {
     e.cancelBubble = true;
@@ -172,12 +182,7 @@ export function SnakeNode({
         listening={false}
       />
 
-      {table.locked && (
-        <Group scaleX={LOCK_ICON / 16} scaleY={LOCK_ICON / 16} listening={false}>
-          <Path data={LOCK_BODY} stroke={palette.labelText} strokeWidth={1.8} lineCap="round" lineJoin="round" />
-          <Path data={LOCK_SHACKLE_CLOSED} stroke={palette.labelText} strokeWidth={1.8} lineCap="round" lineJoin="round" />
-        </Group>
-      )}
+      {table.locked && <LockBadge x={lockX} y={lockY} />}
 
       {/* Editable node handles */}
       {editable &&
