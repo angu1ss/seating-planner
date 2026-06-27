@@ -31,11 +31,11 @@ import {
   faGift,
   faCircle,
   faSquare,
-  faPerson,
-  faPersonDress,
-  faUserCheck,
-  faPeopleRoof,
-  faChild,
+  faChessKing,
+  faChessQueen,
+  faUserTie,
+  faFamily,
+  faBottleBaby,
   faPersonCane,
   faPersonPregnant,
   faWheelchair,
@@ -46,11 +46,13 @@ import {
   faKeyboard,
   faBezierCurve,
   faFilePdf,
+  faRingsWedding,
 } from "@fortawesome/pro-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import type {
   AgeCategory,
   ChairStyle,
+  EventType,
   Guest,
   GuestFeature,
   GuestRole,
@@ -116,6 +118,10 @@ export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   pdf: faFilePdf,
 };
 
+export const EVENT_ICONS: Record<EventType, IconDefinition> = {
+  wedding: faRingsWedding,
+};
+
 export const OBJECT_ICONS: Record<SceneObjectType, IconDefinition> = {
   stage: faMasksTheater,
   screen: faDisplay,
@@ -130,15 +136,15 @@ export const OBJECT_ICONS: Record<SceneObjectType, IconDefinition> = {
 
 /** Role icons (the default "guest" has none). */
 export const ROLE_ICONS: Partial<Record<GuestRole, IconDefinition>> = {
-  groom: faPerson,
-  bride: faPersonDress,
-  witness: faUserCheck,
-  parent: faPeopleRoof,
+  groom: faChessKing,
+  bride: faChessQueen,
+  witness: faUserTie,
+  parent: faFamily,
 };
 
 /** Age-category icons (the default "adult" has none). */
 export const AGE_ICONS: Partial<Record<AgeCategory, IconDefinition>> = {
-  child: faChild,
+  child: faBottleBaby,
   elderly: faPersonCane,
 };
 

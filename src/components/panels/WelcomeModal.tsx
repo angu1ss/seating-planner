@@ -5,7 +5,7 @@ import { useT, useI18n, type Lang } from "../../i18n";
 import { useEscClose } from "../../utils/useEscClose";
 import { readJSONFile } from "../../utils/file";
 import { FLAGS, supportsFlagEmoji } from "../../utils/emoji";
-import { CHAIR_ICONS } from "../../iconmap";
+import { CHAIR_ICONS, EVENT_ICONS } from "../../iconmap";
 import { Icon } from "../Icon";
 import { IconSelect } from "./IconSelect";
 
@@ -100,7 +100,7 @@ export function WelcomeModal({ onClose }: Props) {
                 ariaLabel={t("event.type")}
                 value={project.eventType}
                 onChange={(v) => setProjectMeta({ eventType: v as EventType })}
-                options={[{ value: "wedding", label: t("event.wedding") }]}
+                options={[{ value: "wedding", label: t("event.wedding"), icon: EVENT_ICONS.wedding }]}
               />
             </div>
             <label className="field">

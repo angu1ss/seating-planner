@@ -503,7 +503,8 @@ button.editor-help,
 }
 
 /* Project name in toolbar (desktop) */
-.project-name-display { display: flex; align-items: center; }
+.project-name-display { display: flex; align-items: center; gap: 4px; }
+.project-name-display > svg { color: var(--muted); }
 .name-btn {
   display: inline-flex;
   align-items: center;
@@ -976,6 +977,37 @@ button.editor-help,
   font-size: 12.5px;
 }
 .export-print-note > svg { color: var(--accent); }
+
+/* ---- Editor context menu (right-click / long-press) ---- */
+.context-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 172px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-item:hover { background: var(--surface-2); }
+.ctx-item.danger { color: var(--danger); }
+.ctx-item > svg { width: 16px; color: var(--muted); }
+.ctx-item.danger > svg { color: var(--danger); }
 @media (max-width: 480px) {
   .export-grid { grid-template-columns: 1fr; }
 }

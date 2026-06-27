@@ -35,15 +35,19 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
               {ROWS.map((r) => (
                 <tr key={r.k}>
                   <td className="keys">
-                    {r.keys.split(" ").map((tok, i) =>
-                      tok === "+" || tok === "/" ? (
+                    {r.keys.split(" ").map((tok, i, arr) => {
+                      // "/" is always a separator; "+" is a separator only when it joins
+                      // two keys (e.g. "Ctrl + A") — standalone "+" (zoom) is a real key.
+                      const combiner =
+                        tok === "+" && arr[i - 1] && arr[i - 1] !== "/" && arr[i + 1] && arr[i + 1] !== "/";
+                      return tok === "/" || combiner ? (
                         <span key={i} className="kbd-sep">
                           {tok}
                         </span>
                       ) : (
                         <kbd key={i}>{tok}</kbd>
-                      ),
-                    )}
+                      );
+                    })}
                   </td>
                   <td>{t(r.k)}</td>
                 </tr>

@@ -8,12 +8,13 @@ import { useStore, undo, redo, activeSheet, useCanUndo, useCanRedo } from "../..
 import { getPalette } from "../../theme";
 import { useT, useI18n } from "../../i18n";
 import {
-  clampTableCenter,
+  clampWithExtents,
   computeChairs,
   computeSnakeChairs,
   findFreeSpot,
   findWeldSnap,
-  tableOuterExtent,
+  objectWallExtents,
+  tableWallExtents,
   tablesOverlap,
   tooCloseTables,
   weldedSidesFor,
@@ -29,6 +30,8 @@ import { SnakeNode } from "./SnakeNode";
 import { ObjectNode } from "./ObjectNode";
 import { type Occupant } from "./Chair";
 import { SeatPickerModal } from "../panels/SeatPickerModal";
+import { ContextMenu, type CtxMenuSpec, type CtxItem } from "../panels/ContextMenu";
+import type { CtxPoint } from "../../utils/useContextTrigger";
 
 /** Pixels per meter at zoom = 1. */
 const PPM = 50;
@@ -99,6 +102,8 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   const [draggingStage, setDraggingStage] = useState(false);
   const [marquee, setMarquee] = useState<Marquee | null>(null);
   const [pickSeat, setPickSeat] = useState<{ tableId: string; index: number } | null>(null);
+  const [menu, setMenu] = useState<CtxMenuSpec | null>(null);
+  const middlePan = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
   const didFit = useRef(false);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const pinchDist = useRef<number | null>(null);
@@ -141,6 +146,13 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   const toggleLockSelection = useStore((s) => s.toggleLockSelection);
   const getDocument = useStore((s) => s.getDocument);
   const projectName = useStore((s) => s.project.name);
+  const duplicateTable = useStore((s) => s.duplicateTable);
+  const removeTable = useStore((s) => s.removeTable);
+  const addSnakeNodeEnd = useStore((s) => s.addSnakeNodeEnd);
+  const duplicateObjects = useStore((s) => s.duplicateObjects);
+  const removeObjects = useStore((s) => s.removeObjects);
+  const unassignGuest = useStore((s) => s.unassignGuest);
+  const removeSeatAt = useStore((s) => s.removeSeatAt);
 
   const theme = useI18n((s) => s.theme);
   const palette = getPalette(theme);
@@ -242,6 +254,13 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   };
 
   const handleMouseDown = (e: KonvaEventObject<MouseEvent>) => {
+    // Middle mouse button pans the canvas (like holding Space), from anywhere.
+    if (e.evt.button === 1) {
+      e.evt.preventDefault();
+      middlePan.current = { sx: e.evt.clientX, sy: e.evt.clientY, px: pos.x, py: pos.y };
+      setDraggingStage(true);
+      return;
+    }
     const stage = e.target.getStage();
     if (panMode || e.target !== stage) return; // panning or clicked a shape
     const p = stage.getPointerPosition();
@@ -251,6 +270,11 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   };
 
   const handleMouseMove = (e: KonvaEventObject<MouseEvent>) => {
+    if (middlePan.current) {
+      const mp = middlePan.current;
+      setPos({ x: mp.px + (e.evt.clientX - mp.sx), y: mp.py + (e.evt.clientY - mp.sy) });
+      return;
+    }
     const stage = e.target.getStage();
     const p = stage?.getPointerPosition();
     if (!p) return;
@@ -262,6 +286,11 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   };
 
   const finishMarquee = () => {
+    if (middlePan.current) {
+      middlePan.current = null;
+      setDraggingStage(false);
+      return;
+    }
     if (!marquee) return;
     const minx = Math.min(marquee.x0, marquee.x1);
     const maxx = Math.max(marquee.x0, marquee.x1);
@@ -319,15 +348,18 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   };
 
   const clampOnly = (tbl: TableModel, nx: number, ny: number) => {
-    const e = tableOuterExtent(tbl);
-    return { x: clampTableCenter(nx, e.rx, venue.width), y: clampTableCenter(ny, e.ry, venue.height) };
+    const e = tableWallExtents(tbl);
+    return {
+      x: clampWithExtents(nx, e.left, e.right, venue.width),
+      y: clampWithExtents(ny, e.top, e.bottom, venue.height),
+    };
   };
 
   const placeInside = (tbl: TableModel, nx: number, ny: number) => {
-    const e = tableOuterExtent(tbl);
+    const e = tableWallExtents(tbl);
     return {
-      x: Number(clampTableCenter(snapV(nx), e.rx, venue.width).toFixed(3)),
-      y: Number(clampTableCenter(snapV(ny), e.ry, venue.height).toFixed(3)),
+      x: Number(clampWithExtents(snapV(nx), e.left, e.right, venue.width).toFixed(3)),
+      y: Number(clampWithExtents(snapV(ny), e.top, e.bottom, venue.height).toFixed(3)),
     };
   };
 
@@ -371,11 +403,11 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
       let maxY = -Infinity;
       for (const sid of movedIds) {
         const tbl = byId.get(sid)!;
-        const e = tableOuterExtent(tbl);
-        minX = Math.min(minX, gd.starts[sid].x + dx - e.rx);
-        maxX = Math.max(maxX, gd.starts[sid].x + dx + e.rx);
-        minY = Math.min(minY, gd.starts[sid].y + dy - e.ry);
-        maxY = Math.max(maxY, gd.starts[sid].y + dy + e.ry);
+        const e = tableWallExtents(tbl);
+        minX = Math.min(minX, gd.starts[sid].x + dx - e.left);
+        maxX = Math.max(maxX, gd.starts[sid].x + dx + e.right);
+        minY = Math.min(minY, gd.starts[sid].y + dy - e.top);
+        maxY = Math.max(maxY, gd.starts[sid].y + dy + e.bottom);
       }
       if (minX < 0) dx += -minX;
       else if (maxX > venue.width) dx += venue.width - maxX;
@@ -405,9 +437,9 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
       // Magnetic weld: snap flush to a compatible neighbour edge and join the group.
       const snap = findWeldSnap(tbl, x, y, others);
       if (snap) {
-        const e = tableOuterExtent(tbl);
-        const sx = clampTableCenter(snap.x, e.rx, venue.width);
-        const sy = clampTableCenter(snap.y, e.ry, venue.height);
+        const e = tableWallExtents(tbl);
+        const sx = clampWithExtents(snap.x, e.left, e.right, venue.width);
+        const sy = clampWithExtents(snap.y, e.top, e.bottom, venue.height);
         const stillFlush = Math.abs(sx - snap.x) < 1e-6 && Math.abs(sy - snap.y) < 1e-6;
         const blocked = others.some(
           (o) => o.id !== snap.neighborId && tablesOverlap({ x: sx, y: sy, w: tbl.w, h: tbl.h }, o),
@@ -424,11 +456,11 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   };
 
   const makeDragBound = (table: TableModel) => (absPos: { x: number; y: number }) => {
-    const e = tableOuterExtent(table);
-    const minX = e.rx;
-    const maxX = Math.max(e.rx, venue.width - e.rx);
-    const minY = e.ry;
-    const maxY = Math.max(e.ry, venue.height - e.ry);
+    const e = tableWallExtents(table);
+    const minX = e.left;
+    const maxX = Math.max(e.left, venue.width - e.right);
+    const minY = e.top;
+    const maxY = Math.max(e.top, venue.height - e.bottom);
     const mx = (absPos.x - pos.x) / scale / PPM;
     const my = (absPos.y - pos.y) / scale / PPM;
     const cx = Math.min(Math.max(minX, mx), maxX);
@@ -436,16 +468,17 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     return { x: cx * PPM * scale + pos.x, y: cy * PPM * scale + pos.y };
   };
 
-  const clampAxis = (c: number, size: number, max: number) => {
-    const lo = size / 2;
-    const hi = Math.max(lo, max - size / 2);
-    return Number(Math.min(Math.max(lo, c), hi).toFixed(3));
-  };
+  const clampAxisLo = (c: number, lo: number, hi: number) =>
+    Number(Math.min(Math.max(lo, c), Math.max(lo, hi)).toFixed(3));
 
   const handleObjectMove = (id: string, x: number, y: number) => {
     const obj = objects.find((o) => o.id === id);
     if (!obj) return;
-    updateObject(id, { x: clampAxis(snapV(x), obj.w, venue.width), y: clampAxis(snapV(y), obj.h, venue.height) });
+    const e = objectWallExtents(obj);
+    updateObject(id, {
+      x: clampAxisLo(snapV(x), e.left, venue.width - e.right),
+      y: clampAxisLo(snapV(y), e.top, venue.height - e.bottom),
+    });
   };
 
   const handleObjectTransform = (
@@ -456,12 +489,14 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     if (!obj) return;
     const w = patch.w ?? obj.w;
     const h = patch.h ?? obj.h;
+    const rotation = Math.round(patch.rotation ?? obj.rotation);
+    const e = objectWallExtents({ w, h, rotation });
     updateObject(id, {
       w: Number(w.toFixed(2)),
       h: Number(h.toFixed(2)),
-      x: clampAxis(patch.x ?? obj.x, w, venue.width),
-      y: clampAxis(patch.y ?? obj.y, h, venue.height),
-      rotation: Math.round(patch.rotation ?? obj.rotation),
+      x: clampAxisLo(patch.x ?? obj.x, e.left, venue.width - e.right),
+      y: clampAxisLo(patch.y ?? obj.y, e.top, venue.height - e.bottom),
+      rotation,
     });
   };
 
@@ -473,28 +508,102 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     if (!tbl) return;
     const w = Math.max(0.3, patch.w ?? tbl.w);
     const h = Math.max(0.3, patch.h ?? tbl.h);
-    const e = tableOuterExtent({ ...tbl, w, h });
+    const rotation = Math.round(patch.rotation ?? tbl.rotation);
+    const e = tableWallExtents({ ...tbl, w, h, rotation });
     updateTable(id, {
       w: Number(w.toFixed(2)),
       h: Number(h.toFixed(2)),
-      x: Number(clampTableCenter(patch.x ?? tbl.x, e.rx, venue.width).toFixed(3)),
-      y: Number(clampTableCenter(patch.y ?? tbl.y, e.ry, venue.height).toFixed(3)),
-      rotation: Math.round(patch.rotation ?? tbl.rotation),
+      x: Number(clampWithExtents(patch.x ?? tbl.x, e.left, e.right, venue.width).toFixed(3)),
+      y: Number(clampWithExtents(patch.y ?? tbl.y, e.top, e.bottom, venue.height).toFixed(3)),
+      rotation,
     });
   };
 
   const makeObjectDragBound =
-    (obj: { w: number; h: number }) => (absPos: { x: number; y: number }) => {
-      const minX = obj.w / 2;
-      const maxX = Math.max(obj.w / 2, venue.width - obj.w / 2);
-      const minY = obj.h / 2;
-      const maxY = Math.max(obj.h / 2, venue.height - obj.h / 2);
+    (obj: { w: number; h: number; rotation: number }) => (absPos: { x: number; y: number }) => {
+      const e = objectWallExtents(obj);
+      const minX = e.left;
+      const maxX = Math.max(e.left, venue.width - e.right);
+      const minY = e.top;
+      const maxY = Math.max(e.top, venue.height - e.bottom);
       const mx = (absPos.x - pos.x) / scale / PPM;
       const my = (absPos.y - pos.y) / scale / PPM;
       const cx = Math.min(Math.max(minX, mx), maxX);
       const cy = Math.min(Math.max(minY, my), maxY);
       return { x: cx * PPM * scale + pos.x, y: cy * PPM * scale + pos.y };
     };
+
+  const isSole = (id: string) => selectedIds.length === 1 && selectedIds[0] === id;
+
+  const openTableMenu = (id: string, p: CtxPoint) => {
+    const tbl = tables.find((x) => x.id === id);
+    if (!tbl) return;
+    const items: CtxItem[] = [];
+    // "Edit" just selects to reveal the side panel — drop it if it's already shown.
+    if (!isSole(id)) items.push({ label: t("common.edit"), icon: "edit", onClick: () => select(id, false) });
+    items.push({ label: t("common.duplicate"), icon: "duplicate", onClick: () => duplicateTable(id) });
+    if (tbl.shape === "snake") {
+      items.push({ label: t("ctx.addNode"), icon: "add", onClick: () => addSnakeNodeEnd(id) });
+    }
+    items.push(
+      {
+        label: tbl.locked ? t("ctx.unlock") : t("ctx.lock"),
+        icon: tbl.locked ? "unlock" : "lock",
+        onClick: () => updateTable(id, { locked: !tbl.locked }),
+      },
+      { label: t("common.delete"), icon: "delete", danger: true, onClick: () => removeTable(id) },
+    );
+    setMenu({ x: p.x, y: p.y, items });
+  };
+
+  const openObjectMenu = (id: string, p: CtxPoint) => {
+    const o = objects.find((x) => x.id === id);
+    if (!o) return;
+    const items: CtxItem[] = [];
+    if (!isSole(id)) items.push({ label: t("common.edit"), icon: "edit", onClick: () => select(id, false) });
+    items.push(
+      { label: t("common.duplicate"), icon: "duplicate", onClick: () => duplicateObjects([id]) },
+      {
+        label: o.locked ? t("ctx.unlock") : t("ctx.lock"),
+        icon: o.locked ? "unlock" : "lock",
+        onClick: () => updateObject(id, { locked: !o.locked }),
+      },
+      { label: t("common.delete"), icon: "delete", danger: true, onClick: () => removeObjects([id]) },
+    );
+    setMenu({ x: p.x, y: p.y, items });
+  };
+
+  const openSeatMenu = (tableId: string, index: number, p: CtxPoint) => {
+    const tbl = tables.find((x) => x.id === tableId);
+    const g = guests.find((x) => x.seat?.tableId === tableId && x.seat.index === index);
+    const items: CtxItem[] = [
+      { label: t("ctx.pickGuest"), icon: "guests", onClick: () => setPickSeat({ tableId, index }) },
+    ];
+    if (g) items.push({ label: t("seat.free"), icon: "unweld", onClick: () => unassignGuest(g.id) });
+    items.push({
+      label: t("ctx.seatPlus"),
+      icon: "add",
+      onClick: () => tbl && updateTable(tableId, { seatCount: tbl.seatCount + 1 }),
+    });
+    items.push({
+      label: t("ctx.seatMinus"),
+      icon: "delete",
+      danger: true,
+      onClick: () => removeSeatAt(tableId, index),
+    });
+    setMenu({ x: p.x, y: p.y, items });
+  };
+
+  const openSnakeNodeMenu = (tableId: string, index: number, p: CtxPoint) => {
+    setMenu({
+      x: p.x,
+      y: p.y,
+      items: [
+        { label: t("ctx.addNode"), icon: "add", onClick: () => addSnakeNodeEnd(tableId) },
+        { label: t("ctx.removeNode"), icon: "delete", danger: true, onClick: () => removeSnakeNode(tableId, index) },
+      ],
+    });
+  };
 
   // Space-to-pan toggle.
   useEffect(() => {
@@ -539,7 +648,9 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       const a = kb.current;
-      const k = e.key.toLowerCase();
+      // Use physical key codes so shortcuts are layout-independent (RU/EN etc.) —
+      // e.key returns Cyrillic letters / remapped brackets on a non-Latin layout.
+      const code = e.code;
       const meta = e.metaKey || e.ctrlKey;
 
       if (e.key === "Escape") {
@@ -547,27 +658,27 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
         return;
       }
       if (meta) {
-        if (k === "a") {
+        if (code === "KeyA") {
           if (e.shiftKey) a.clearSel();
           else a.selectAll();
           e.preventDefault();
-        } else if (k === "s") {
+        } else if (code === "KeyS") {
           a.exportDoc();
           e.preventDefault();
-        } else if (k === "c") {
+        } else if (code === "KeyC") {
           a.copySelected();
           e.preventDefault();
-        } else if (k === "v") {
+        } else if (code === "KeyV") {
           a.pasteClipboard();
           e.preventDefault();
-        } else if (k === "d") {
+        } else if (code === "KeyD") {
           a.duplicateSelected();
           e.preventDefault();
-        } else if (k === "z") {
+        } else if (code === "KeyZ") {
           if (e.shiftKey) a.redo();
           else a.undo();
           e.preventDefault();
-        } else if (k === "y") {
+        } else if (code === "KeyY") {
           a.redo();
           e.preventDefault();
         }
@@ -577,22 +688,22 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
       if (e.key === "Delete" || e.key === "Backspace") {
         a.deleteSelected();
         e.preventDefault();
-      } else if (e.key === "[") {
+      } else if (code === "BracketLeft") {
         a.rotate(e.shiftKey ? -90 : -15);
         e.preventDefault();
-      } else if (e.key === "]") {
+      } else if (code === "BracketRight") {
         a.rotate(e.shiftKey ? 90 : 15);
         e.preventDefault();
-      } else if (k === "l") {
+      } else if (code === "KeyL") {
         a.toggleLock();
         e.preventDefault();
-      } else if (e.key === "0") {
+      } else if (code === "Digit0" || code === "Numpad0") {
         a.fit();
         e.preventDefault();
-      } else if (e.key === "+" || e.key === "=" || e.key === "PageUp") {
+      } else if (code === "Equal" || code === "NumpadAdd" || e.key === "PageUp") {
         a.zoomBy(1.2);
         e.preventDefault();
-      } else if (e.key === "-" || e.key === "_" || e.key === "PageDown") {
+      } else if (code === "Minus" || code === "NumpadSubtract" || e.key === "PageDown") {
         a.zoomBy(1 / 1.2);
         e.preventDefault();
       } else if (e.key === "ArrowUp") {
@@ -689,7 +800,7 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     gridLines.push([0, gy * PPM, venue.width * PPM, gy * PPM]);
   }
 
-  const cursor = spaceDown ? (draggingStage ? "grabbing" : "grab") : undefined;
+  const cursor = draggingStage ? "grabbing" : spaceDown ? "grab" : undefined;
 
   return (
     <div
@@ -715,6 +826,7 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={finishMarquee}
+        onMouseLeave={finishMarquee}
         onDragStart={(e) => {
           if (e.target === e.target.getStage()) setDraggingStage(true);
         }}
@@ -753,6 +865,7 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
               onSelect={select}
               onMove={handleObjectMove}
               onTransform={handleObjectTransform}
+              onContextMenu={(p) => openObjectMenu(o.id, p)}
               dragBound={makeObjectDragBound(o)}
             />
           ))}
@@ -772,6 +885,7 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
                 occupants={occupantsByTable.get(tbl.id) ?? NO_OCCUPANTS}
                 highlightIndex={highlightSeat && highlightSeat.tableId === tbl.id ? highlightSeat.index : null}
                 onSeatClick={(tableId, index) => setPickSeat({ tableId, index })}
+                onSeatContextMenu={(index, p) => openSeatMenu(tbl.id, index, p)}
                 onSelect={select}
                 onDragStartTable={handleDragStart}
                 onDragMove={handleDragMove}
@@ -780,6 +894,8 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
                 onNodeCommit={commitSnakeNode}
                 onAddNode={addSnakeNode}
                 onRemoveNode={removeSnakeNode}
+                onContextMenu={(p) => openTableMenu(tbl.id, p)}
+                onNodeContextMenu={(index, p) => openSnakeNodeMenu(tbl.id, index, p)}
                 dragBound={makeDragBound(tbl)}
               />
             ) : (
@@ -798,11 +914,13 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
                 occupants={occupantsByTable.get(tbl.id) ?? NO_OCCUPANTS}
                 highlightIndex={highlightSeat && highlightSeat.tableId === tbl.id ? highlightSeat.index : null}
                 onSeatClick={(tableId, index) => setPickSeat({ tableId, index })}
+                onSeatContextMenu={(index, p) => openSeatMenu(tbl.id, index, p)}
                 onSelect={select}
                 onDragStartTable={handleDragStart}
                 onDragMove={handleDragMove}
                 onMove={handleDragEnd}
                 onTransform={handleTableTransform}
+                onContextMenu={(p) => openTableMenu(tbl.id, p)}
                 dragBound={makeDragBound(tbl)}
               />
             ),
@@ -861,6 +979,7 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
       {pickSeat && (
         <SeatPickerModal tableId={pickSeat.tableId} index={pickSeat.index} onClose={() => setPickSeat(null)} />
       )}
+      {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
     </div>
   );
 }

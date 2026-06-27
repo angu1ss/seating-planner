@@ -10,8 +10,11 @@ import {
   insertSnakeNode,
   computeSnakeChairs,
   tableOuterExtent,
+  tableWallExtents,
+  objectWallExtents,
   seatWorldPositions,
 } from "./geometry";
+import { CHAIR_OFFSET, CHAIR_RADIUS } from "./constants";
 
 function rect(over: Partial<TableModel> = {}): TableModel {
   return {
@@ -132,8 +135,13 @@ test("computeSnakeChairs: gentle S seats ~ requested count on both sides", () =>
   assert.ok(ch.length >= 13 && ch.length <= 14, `got ${ch.length}`);
 });
 
-test("computeSnakeChairs: both sides disabled → no seats", () => {
-  assert.equal(computeSnakeChairs(snake({ disabledSides: ["left", "right"] })).length, 0);
+test("computeSnakeChairs: seats wrap around the whole band (incl. ends)", () => {
+  // Even spacing around the outline: a horizontal S should seat on both long sides.
+  const ch = computeSnakeChairs(snake({ seatCount: 14 }));
+  assert.ok(
+    ch.some((c) => c.y < 0) && ch.some((c) => c.y > 0),
+    "seats appear on both long sides of the band",
+  );
 });
 
 test("computeSnakeChairs: zero seatCount → no seats", () => {
@@ -165,4 +173,36 @@ test("seatWorldPositions: one position per chair, clustered around the table", (
     assert.equal(p.tableId, "t1");
     assert.ok(Math.hypot(p.x - 2, p.y - 2) < 1.6, `seat too far: ${p.x},${p.y}`);
   }
+});
+
+// ─── Wall extents (clamp) ───────────────────────────────────────────────────
+
+const PAD = CHAIR_OFFSET + CHAIR_RADIUS;
+const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+
+test("objectWallExtents: rotating 90° swaps horizontal/vertical extents", () => {
+  const flat = objectWallExtents({ w: 2, h: 1, rotation: 0 });
+  assert.ok(near(flat.left, 1) && near(flat.right, 1));
+  assert.ok(near(flat.top, 0.5) && near(flat.bottom, 0.5));
+  const turned = objectWallExtents({ w: 2, h: 1, rotation: 90 });
+  assert.ok(near(turned.left, 0.5) && near(turned.right, 0.5));
+  assert.ok(near(turned.top, 1) && near(turned.bottom, 1));
+});
+
+test("tableWallExtents: rect reserves chair pad on every seated side", () => {
+  const e = tableWallExtents(rect({ w: 1.8, h: 0.8 }));
+  assert.ok(near(e.left, 0.9 + PAD) && near(e.right, 0.9 + PAD));
+  assert.ok(near(e.top, 0.4 + PAD) && near(e.bottom, 0.4 + PAD));
+});
+
+test("tableWallExtents: a chairless side can touch the wall (no pad reserved)", () => {
+  const e = tableWallExtents(rect({ w: 1.8, h: 0.8, disabledSides: ["left", "right"] }));
+  assert.ok(near(e.left, 0.9) && near(e.right, 0.9)); // flush both sides
+  assert.ok(near(e.top, 0.4 + PAD) && near(e.bottom, 0.4 + PAD)); // chairs still top/bottom
+});
+
+test("tableWallExtents: disabling one side is asymmetric", () => {
+  const e = tableWallExtents(rect({ w: 1.8, h: 0.8, disabledSides: ["left"] }));
+  assert.ok(near(e.left, 0.9)); // flush on the left
+  assert.ok(near(e.right, 0.9 + PAD)); // chairs still on the right
 });

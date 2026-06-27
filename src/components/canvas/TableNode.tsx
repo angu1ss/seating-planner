@@ -3,11 +3,12 @@ import { Group, Rect, Ellipse, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, Side, TableModel } from "../../types";
-import { computeChairs, isTight } from "../../geometry";
+import { computeChairs, isTight, objectWallExtents, readableAngle } from "../../geometry";
 import type { Palette } from "../../theme";
 import { useT } from "../../i18n";
 import { Chair, type Occupant } from "./Chair";
 import { LockBadge } from "./LockBadge";
+import { useContextTrigger, type CtxPoint } from "../../utils/useContextTrigger";
 
 interface TransformPatch {
   w?: number;
@@ -31,11 +32,13 @@ interface Props {
   occupants: Record<number, Occupant>;
   highlightIndex: number | null;
   onSeatClick: (tableId: string, index: number) => void;
+  onSeatContextMenu: (index: number, p: CtxPoint) => void;
   onSelect: (id: string, additive: boolean) => void;
   onDragStartTable: (id: string) => void;
   onDragMove: (id: string, x: number, y: number) => void;
   onMove: (id: string, x: number, y: number) => void;
   onTransform: (id: string, patch: TransformPatch) => void;
+  onContextMenu: (p: CtxPoint) => void;
   dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
 }
 
@@ -55,14 +58,17 @@ export function TableNode({
   occupants,
   highlightIndex,
   onSeatClick,
+  onSeatContextMenu,
   onSelect,
   onDragStartTable,
   onDragMove,
   onMove,
   onTransform,
+  onContextMenu,
   dragBound,
 }: Props) {
   const t = useT();
+  const { handlers: ctx } = useContextTrigger(onContextMenu);
   const groupRef = useRef<Konva.Group>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const editable = soleSelected && !table.locked;
@@ -110,6 +116,13 @@ export function TableNode({
   const hpx = table.h * ppm;
   const haloPx = PODIUM_HALO * ppm;
 
+  // Lock badge: pinned to the top-right of the (rotated) footprint, upright — same
+  // spot for every shape regardless of rotation. Round/oval sit on the rim (×√½).
+  const aabb = objectWallExtents({ w: table.w, h: table.h, rotation: table.rotation });
+  const badgeK = table.shape === "ellipse" ? Math.SQRT1_2 : 1;
+  const badgeX = aabb.right * ppm * badgeK;
+  const badgeY = -aabb.top * ppm * badgeK;
+
   const handleSelect = (e: KonvaEventObject<Event>) => {
     e.cancelBubble = true;
     const additive = Boolean((e.evt as MouseEvent | undefined)?.shiftKey);
@@ -134,6 +147,7 @@ export function TableNode({
       }}
       onDragMove={(e) => onDragMove(table.id, e.target.x() / ppm, e.target.y() / ppm)}
       onDragEnd={(e) => onMove(table.id, e.target.x() / ppm, e.target.y() / ppm)}
+      {...ctx}
     >
       {/* Chairs (drawn first, behind the table top) */}
       {chairs.map((c, i) => (
@@ -145,7 +159,9 @@ export function TableNode({
           palette={palette}
           occupant={occupants[i] ?? null}
           highlighted={i === highlightIndex}
+          tableRotation={table.rotation}
           onClick={() => onSeatClick(table.id, i)}
+          onContextMenu={(p) => onSeatContextMenu(i, p)}
         />
       ))}
 
@@ -205,6 +221,7 @@ export function TableNode({
         height={hpx}
         offsetX={Math.max(wpx, 60) / 2}
         offsetY={hpx / 2}
+        rotation={readableAngle(table.rotation) - table.rotation}
         align="center"
         verticalAlign="middle"
         fontSize={12}
@@ -213,8 +230,12 @@ export function TableNode({
         listening={false}
       />
 
-      {table.locked && <LockBadge x={wpx / 2} y={-hpx / 2} />}
     </Group>
+    {table.locked && (
+      <Group x={table.x * ppm} y={table.y * ppm} listening={false}>
+        <LockBadge x={badgeX} y={badgeY} />
+      </Group>
+    )}
       {editable && (
         <Transformer
           ref={trRef}

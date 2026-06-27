@@ -3,6 +3,7 @@ import { useStore } from "../../store";
 import { useT } from "../../i18n";
 import { useMediaQuery } from "../../utils/useMediaQuery";
 import { Icon } from "../Icon";
+import { EVENT_ICONS } from "../../iconmap";
 import { SettingsMenu } from "./SettingsMenu";
 import { AppActions } from "./AppActions";
 
@@ -30,6 +31,7 @@ export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, sh
         </button>
         <span className="app-title">{t("app.name")}</span>
         <div className="project-name-display only-desktop">
+          <Icon icon={EVENT_ICONS[project.eventType]} size={15} />
           {editing ? (
             <input
               autoFocus

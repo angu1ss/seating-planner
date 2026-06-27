@@ -1,11 +1,13 @@
+import { useRef } from "react";
 import { Group, Circle, Line, Text } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, TableModel } from "../../types";
-import { computeSnakeChairs, snakeCenterline, snakeLength } from "../../geometry";
+import { computeSnakeChairs, readableAngle, snakeCenterline, snakeLength } from "../../geometry";
 import type { Palette } from "../../theme";
 import { useT } from "../../i18n";
 import { Chair, type Occupant } from "./Chair";
 import { LockBadge } from "./LockBadge";
+import { useContextTrigger, type CtxPoint } from "../../utils/useContextTrigger";
 
 interface Props {
   table: TableModel;
@@ -20,6 +22,7 @@ interface Props {
   occupants: Record<number, Occupant>;
   highlightIndex: number | null;
   onSeatClick: (tableId: string, index: number) => void;
+  onSeatContextMenu: (index: number, p: CtxPoint) => void;
   onSelect: (id: string, additive: boolean) => void;
   onDragStartTable: (id: string) => void;
   onDragMove: (id: string, x: number, y: number) => void;
@@ -28,6 +31,8 @@ interface Props {
   onNodeCommit: (id: string) => void;
   onAddNode: (id: string, x: number, y: number) => void;
   onRemoveNode: (id: string, index: number) => void;
+  onContextMenu: (p: CtxPoint) => void;
+  onNodeContextMenu: (index: number, p: CtxPoint) => void;
   dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
 }
 
@@ -44,6 +49,7 @@ export function SnakeNode({
   occupants,
   highlightIndex,
   onSeatClick,
+  onSeatContextMenu,
   onSelect,
   onDragStartTable,
   onDragMove,
@@ -52,9 +58,19 @@ export function SnakeNode({
   onNodeCommit,
   onAddNode,
   onRemoveNode,
+  onContextMenu,
+  onNodeContextMenu,
   dragBound,
 }: Props) {
   const t = useT();
+  const { handlers: ctx } = useContextTrigger(onContextMenu);
+  const nodeLp = useRef<number | null>(null);
+  const cancelNodeLp = () => {
+    if (nodeLp.current !== null) {
+      window.clearTimeout(nodeLp.current);
+      nodeLp.current = null;
+    }
+  };
   const path = table.path ?? [];
   const editable = soleSelected && !table.locked;
 
@@ -63,9 +79,8 @@ export function SnakeNode({
   const chairs = computeSnakeChairs(table);
   const chairStyle: ChairStyle = table.chairStyle ?? projectChairStyle;
 
-  // Comfort: spacing = total length × enabled sides ÷ seats.
-  const sidesOn = (table.disabledSides.includes("right") ? 0 : 1) + (table.disabledSides.includes("left") ? 0 : 1);
-  const spacing = sidesOn > 0 && table.seatCount > 0 ? (snakeLength(path) * sidesOn) / table.seatCount : Infinity;
+  // Comfort: seats run around the whole band ≈ both long sides.
+  const spacing = table.seatCount > 0 ? (2 * snakeLength(path)) / table.seatCount : Infinity;
   const tight = table.seatCount > 0 && spacing < minSpacing - 1e-9;
 
   const stroke = selected
@@ -82,17 +97,29 @@ export function SnakeNode({
   const haloPx = 0.14 * ppm; // podium ring width, meters → px
   const label = table.name.trim() || `${t("table.word")} ${table.number}`;
 
-  // Lock badge just past the band's right-most tip.
-  let rx = -Infinity;
-  let ry = 0;
-  for (const p of dense) {
-    if (p.x > rx) {
-      rx = p.x;
-      ry = p.y;
-    }
+  // Lock badge ON the band (its centerline end-tip) so it stays inside the table and
+  // doesn't overlap the guests' chairs/icons sitting outside the band.
+  const tip = dense[dense.length - 1] ?? { x: 0, y: 0 };
+  const brad = (table.rotation * Math.PI) / 180;
+  const badgeX = (tip.x * Math.cos(brad) - tip.y * Math.sin(brad)) * ppm;
+  const badgeY = (tip.x * Math.sin(brad) + tip.y * Math.cos(brad)) * ppm;
+
+  // Label sits ON the band at the centreline's arc-length midpoint, oriented along the
+  // band — so it's always inside the table (it tilts to follow the band if needed).
+  let arc = 0;
+  const cum: number[] = [0];
+  for (let i = 1; i < dense.length; i++) {
+    arc += Math.hypot(dense[i].x - dense[i - 1].x, dense[i].y - dense[i - 1].y);
+    cum.push(arc);
   }
-  const lockX = Number.isFinite(rx) ? (rx + table.h / 2) * ppm : 0;
-  const lockY = ry * ppm;
+  let mi = 0;
+  while (mi < dense.length - 2 && cum[mi + 1] < arc / 2) mi++;
+  const segLen = cum[mi + 1] - cum[mi] || 1;
+  const mf = (arc / 2 - cum[mi]) / segLen;
+  const labelX = (dense[mi].x + (dense[mi + 1].x - dense[mi].x) * mf) * ppm;
+  const labelY = (dense[mi].y + (dense[mi + 1].y - dense[mi].y) * mf) * ppm;
+  const tAng = (Math.atan2(dense[mi + 1].y - dense[mi].y, dense[mi + 1].x - dense[mi].x) * 180) / Math.PI;
+  const labelRot = readableAngle(table.rotation + tAng) - table.rotation;
 
   const handleSelect = (e: KonvaEventObject<Event>) => {
     e.cancelBubble = true;
@@ -109,9 +136,11 @@ export function SnakeNode({
   };
 
   return (
+    <>
     <Group
       x={table.x * ppm}
       y={table.y * ppm}
+      rotation={table.rotation}
       draggable={!panLocked && !table.locked}
       dragBoundFunc={dragBound}
       onClick={handleSelect}
@@ -122,6 +151,7 @@ export function SnakeNode({
       }}
       onDragMove={(e) => onDragMove(table.id, e.target.x() / ppm, e.target.y() / ppm)}
       onDragEnd={(e) => onMove(table.id, e.target.x() / ppm, e.target.y() / ppm)}
+      {...ctx}
     >
       {/* Chairs (behind the band) */}
       {chairs.map((c, i) => (
@@ -133,7 +163,9 @@ export function SnakeNode({
           palette={palette}
           occupant={occupants[i] ?? null}
           highlighted={i === highlightIndex}
+          tableRotation={table.rotation}
           onClick={() => onSeatClick(table.id, i)}
+          onContextMenu={(p) => onSeatContextMenu(i, p)}
         />
       ))}
 
@@ -172,17 +204,18 @@ export function SnakeNode({
 
       <Text
         text={`${label}\n${table.seatCount} ${t("table.seatsShort")}`}
-        x={-40}
-        y={-12}
+        x={labelX}
+        y={labelY}
         width={80}
+        offsetX={40}
+        offsetY={14}
+        rotation={labelRot}
         align="center"
         fontSize={12}
         lineHeight={1.25}
         fill={palette.labelText}
         listening={false}
       />
-
-      {table.locked && <LockBadge x={lockX} y={lockY} />}
 
       {/* Editable node handles */}
       {editable &&
@@ -215,8 +248,29 @@ export function SnakeNode({
               e.cancelBubble = true;
               onRemoveNode(table.id, i);
             }}
+            onContextMenu={(e) => {
+              e.evt.preventDefault();
+              e.cancelBubble = true;
+              onNodeContextMenu(i, { x: e.evt.clientX, y: e.evt.clientY });
+            }}
+            onTouchStart={(e) => {
+              e.cancelBubble = true;
+              const tp = e.evt.touches[0];
+              if (!tp) return;
+              const pt = { x: tp.clientX, y: tp.clientY };
+              cancelNodeLp();
+              nodeLp.current = window.setTimeout(() => onNodeContextMenu(i, pt), 500);
+            }}
+            onTouchMove={cancelNodeLp}
+            onTouchEnd={cancelNodeLp}
           />
         ))}
     </Group>
+    {table.locked && (
+      <Group x={table.x * ppm} y={table.y * ppm} listening={false}>
+        <LockBadge x={badgeX} y={badgeY} />
+      </Group>
+    )}
+    </>
   );
 }

@@ -64,7 +64,7 @@ export function AddTableModal({ onClose }: Props) {
       },
       Math.max(1, count),
     );
-    // Keep the panel open so tables can be added while watching the canvas.
+    onClose();
   };
 
   const m = t("unit.m");

@@ -89,10 +89,65 @@ export function tableOuterExtent(table: TableModel): { rx: number; ry: number } 
   return { rx: table.w / 2 + pad, ry: table.h / 2 + pad };
 }
 
+/** Snake centreline sampled in world coords (honours position + rotation). */
+function snakeWorldPoints(table: TableModel): { x: number; y: number }[] {
+  if (table.shape !== "snake" || !table.path || table.path.length < 2) return [{ x: table.x, y: table.y }];
+  const rad = (table.rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return snakeCenterline(table.path).map((p) => ({
+    x: table.x + p.x * cos - p.y * sin,
+    y: table.y + p.x * sin + p.y * cos,
+  }));
+}
+
+/** Distance from a point to a box with per-side extents (left/right/top/bottom). */
+function distToBox(px: number, py: number, cx: number, cy: number, w: WallExtents): number {
+  const dx = px < cx ? Math.max(cx - w.left - px, 0) : Math.max(px - (cx + w.right), 0);
+  const dy = py < cy ? Math.max(cy - w.top - py, 0) : Math.max(py - (cy + w.bottom), 0);
+  return Math.hypot(dx, dy);
+}
+
+/** A snake band's perpendicular seating reach (band half + chair ring), meters. */
+function snakeReach(table: TableModel): number {
+  return table.h / 2 + CHAIR_OFFSET + CHAIR_RADIUS;
+}
+
+/**
+ * Gap between two tables' seating zones, meters. Measured from the chairs — but where
+ * a facing side is disabled, `tableWallExtents` reserves no chair pad there, so the
+ * gap is measured from the bare table edge instead. Band-aware for snakes.
+ */
+function tableGap(a: TableModel, b: TableModel): number {
+  if (a.shape === "snake" && b.shape === "snake") {
+    const ap = snakeWorldPoints(a);
+    const bp = snakeWorldPoints(b);
+    let min = Infinity;
+    for (const p of ap) for (const q of bp) min = Math.min(min, Math.hypot(p.x - q.x, p.y - q.y));
+    return min - snakeReach(a) - snakeReach(b);
+  }
+  if (a.shape === "snake" || b.shape === "snake") {
+    const snake = a.shape === "snake" ? a : b;
+    const other = a.shape === "snake" ? b : a;
+    const w = tableWallExtents(other); // per-side chair reach (none on disabled sides)
+    let min = Infinity;
+    for (const p of snakeWorldPoints(snake)) min = Math.min(min, distToBox(p.x, p.y, other.x, other.y, w));
+    return min - snakeReach(snake);
+  }
+  // Rect/ellipse pair: directional chair-box gap (honours disabled sides + rotation).
+  const wa = tableWallExtents(a);
+  const wb = tableWallExtents(b);
+  const ax = a.x < b.x ? wa.right : wa.left;
+  const bx = a.x < b.x ? wb.left : wb.right;
+  const ay = a.y < b.y ? wa.bottom : wa.top;
+  const by = a.y < b.y ? wb.top : wb.bottom;
+  return Math.max(Math.abs(a.x - b.x) - ax - bx, Math.abs(a.y - b.y) - ay - by);
+}
+
 /**
  * IDs of tables whose chair zones are closer than `clearance` to a neighbour —
- * i.e. there isn't enough room to sit down or walk between them.
- * Axis-aligned approximation (ignores rotation) — enough for an MVP warning.
+ * i.e. there isn't enough room to sit down or walk between them. Band-aware for
+ * snakes (measured from the centreline), axis-aligned heuristic for rect/ellipse.
  */
 export function tooCloseTables(tables: TableModel[], clearance = AISLE_CLEARANCE): Set<string> {
   const out = new Set<string>();
@@ -101,12 +156,7 @@ export function tooCloseTables(tables: TableModel[], clearance = AISLE_CLEARANCE
       const a = tables[i];
       const b = tables[j];
       if (a.groupId && a.groupId === b.groupId) continue; // welded — meant to touch
-      const ea = tableOuterExtent(a);
-      const eb = tableOuterExtent(b);
-      if (
-        Math.abs(a.x - b.x) < ea.rx + eb.rx + clearance &&
-        Math.abs(a.y - b.y) < ea.ry + eb.ry + clearance
-      ) {
+      if (tableGap(a, b) < clearance) {
         out.add(a.id);
         out.add(b.id);
       }
@@ -119,6 +169,87 @@ export function tooCloseTables(tables: TableModel[], clearance = AISLE_CLEARANCE
 export function clampTableCenter(center: number, halfExtent: number, venueSize: number): number {
   const lo = halfExtent;
   const hi = Math.max(lo, venueSize - halfExtent);
+  return Math.min(Math.max(lo, center), hi);
+}
+
+/** Directional footprint extents from the center, in world axes. */
+export interface WallExtents {
+  left: number; // toward −x
+  right: number; // toward +x
+  top: number; // toward −y
+  bottom: number; // toward +y
+}
+
+/** Extents of a w×h box (half-sizes hw/hh) with per-side margins, rotated by `deg`. */
+function rotatedExtents(
+  hw: number,
+  hh: number,
+  ml: number,
+  mr: number,
+  mt: number,
+  mb: number,
+  deg: number,
+): WallExtents {
+  const r = (deg * Math.PI) / 180;
+  const cos = Math.cos(r);
+  const sin = Math.sin(r);
+  const corners: Array<[number, number]> = [
+    [-(hw + ml), -(hh + mt)],
+    [hw + mr, -(hh + mt)],
+    [hw + mr, hh + mb],
+    [-(hw + ml), hh + mb],
+  ];
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of corners) {
+    const wx = x * cos - y * sin;
+    const wy = x * sin + y * cos;
+    minX = Math.min(minX, wx);
+    maxX = Math.max(maxX, wx);
+    minY = Math.min(minY, wy);
+    maxY = Math.max(maxY, wy);
+  }
+  return { left: -minX, right: maxX, top: -minY, bottom: maxY };
+}
+
+/**
+ * Footprint extents (incl. the chair ring) of a table for wall clamping. Unlike the
+ * symmetric `tableOuterExtent`, this honours the table's rotation AND only reserves
+ * chair space on sides that actually have seats — so a chairless side can touch the wall.
+ */
+export function tableWallExtents(table: TableModel): WallExtents {
+  const pad = CHAIR_OFFSET + CHAIR_RADIUS;
+  if (table.shape === "snake") {
+    const e = tableOuterExtent(table); // path-based, already padded
+    return { left: e.rx, right: e.rx, top: e.ry, bottom: e.ry };
+  }
+  if (table.shape === "ellipse") {
+    return rotatedExtents(table.w / 2, table.h / 2, pad, pad, pad, pad, table.rotation);
+  }
+  const m = (side: Side) => (table.disabledSides.includes(side) ? 0 : pad);
+  return rotatedExtents(table.w / 2, table.h / 2, m("left"), m("right"), m("top"), m("bottom"), table.rotation);
+}
+
+/** Footprint extents of a (chairless) scene object, honouring its rotation. */
+export function objectWallExtents(obj: { w: number; h: number; rotation: number }): WallExtents {
+  return rotatedExtents(obj.w / 2, obj.h / 2, 0, 0, 0, 0, obj.rotation);
+}
+
+/**
+ * Reduce an angle (deg) to the readable range [-90, 90) in 180° steps — used to keep
+ * labels upright on rotated shapes (e.g. 90° → -90°, 180° / -180° → 0°).
+ */
+export function readableAngle(deg: number): number {
+  const r = ((((deg + 90) % 180) + 180) % 180) - 90;
+  return r;
+}
+
+/** Clamp a center so a footprint spanning [loExtent, hiExtent] stays inside [0, size]. */
+export function clampWithExtents(center: number, loExtent: number, hiExtent: number, size: number): number {
+  const lo = loExtent;
+  const hi = Math.max(lo, size - hiExtent);
   return Math.min(Math.max(lo, center), hi);
 }
 
@@ -455,7 +586,7 @@ export function seatWorldPositions(tables: TableModel[]): { tableId: string; ind
   for (const t of tables) {
     const welded = t.groupId ? weldedSidesFor(t, groups.get(t.groupId)!) : [];
     const local = t.shape === "snake" ? computeSnakeChairs(t) : computeChairs(t, welded);
-    const rad = t.shape === "snake" ? 0 : (t.rotation * Math.PI) / 180;
+    const rad = (t.rotation * Math.PI) / 180;
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
     for (let i = 0; i < local.length; i++) {
@@ -512,63 +643,88 @@ export function computeSnakeChairs(table: TableModel): ChairPos[] {
     return { turn: Math.sign(dth), radius };
   });
 
-  const signs: number[] = [];
-  if (!table.disabledSides.includes("right")) signs.push(1);
-  if (!table.disabledSides.includes("left")) signs.push(-1);
-  if (!signs.length) return [];
-
-  interface OffPt {
+  // Seat around the WHOLE band outline like a round table: walk one long side forward,
+  // round the end cap, back along the other long side, round the start cap — a closed
+  // loop — then drop seats at even arc-length spacing along the seatable parts. Inner
+  // corner folds stay unseatable (our snake-specific quirk).
+  interface CPt {
     x: number;
     y: number;
     rot: number;
     valid: boolean;
   }
+  const contour: CPt[] = [];
+
+  const pushSide = (i: number, sign: number) => {
+    const nx = tang[i].ty * sign;
+    const ny = -tang[i].tx * sign;
+    const concave = sign * curv[i].turn < 0;
+    const valid = !(concave && curv[i].radius < innerLimit); // inner-corner fold → unseatable
+    contour.push({
+      x: dense[i].x + nx * off,
+      y: dense[i].y + ny * off,
+      rot: (Math.atan2(ny, nx) * 180) / Math.PI + 90,
+      valid,
+    });
+  };
+
+  // Half-circle cap around dense[idx] sweeping +π from a0; endpoints skipped (the
+  // adjacent long sides already supply them).
+  const pushCap = (idx: number, a0: number) => {
+    const STEPS = 8;
+    for (let s = 1; s < STEPS; s++) {
+      const th = a0 + (Math.PI * s) / STEPS;
+      contour.push({
+        x: dense[idx].x + Math.cos(th) * off,
+        y: dense[idx].y + Math.sin(th) * off,
+        rot: (th * 180) / Math.PI + 90,
+        valid: true,
+      });
+    }
+  };
+
+  const normAngle = (i: number, sign: number) => Math.atan2(-tang[i].tx * sign, tang[i].ty * sign);
+
+  for (let i = 0; i < M; i++) pushSide(i, 1); // one long side, forward
+  pushCap(M - 1, normAngle(M - 1, 1)); // end cap
+  for (let i = M - 1; i >= 0; i--) pushSide(i, -1); // other long side, back
+  pushCap(0, normAngle(0, -1)); // start cap
+
+  // Seatable segments around the closed loop (wrapping last → first).
   interface Seg {
     i0: number;
     i1: number;
     startArc: number;
     len: number;
   }
-  const sideData = signs.map((sign) => {
-    const pts: OffPt[] = dense.map((p, i) => {
-      const { tx, ty } = tang[i];
-      const nx = ty * sign;
-      const ny = -tx * sign;
-      const concave = sign * curv[i].turn < 0;
-      const valid = !(concave && curv[i].radius < innerLimit); // inner-corner fold → unseatable
-      return { x: p.x + nx * off, y: p.y + ny * off, rot: (Math.atan2(ny, nx) * 180) / Math.PI + 90, valid };
-    });
-    const seg: Seg[] = [];
-    let validLen = 0;
-    for (let i = 1; i < pts.length; i++) {
-      if (pts[i].valid && pts[i - 1].valid) {
-        const len = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-        seg.push({ i0: i - 1, i1: i, startArc: validLen, len });
-        validLen += len;
-      }
+  const N = contour.length;
+  const seg: Seg[] = [];
+  let validLen = 0;
+  for (let i = 0; i < N; i++) {
+    const a = contour[i];
+    const b = contour[(i + 1) % N];
+    if (a.valid && b.valid) {
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      seg.push({ i0: i, i1: (i + 1) % N, startArc: validLen, len });
+      validLen += len;
     }
-    return { pts, seg, validLen };
-  });
+  }
+  if (validLen <= 0 || seg.length === 0) return [];
 
-  const counts = apportion(total, sideData.map((s) => s.validLen));
   const chairs: ChairPos[] = [];
-  sideData.forEach((sd, idx) => {
-    const k = counts[idx];
-    if (k <= 0 || sd.validLen <= 0 || sd.seg.length === 0) return;
-    for (let i = 0; i < k; i++) {
-      const target = ((i + 0.5) / k) * sd.validLen;
-      let seg = sd.seg[sd.seg.length - 1];
-      for (const s of sd.seg) {
-        if (target <= s.startArc + s.len) {
-          seg = s;
-          break;
-        }
+  for (let i = 0; i < total; i++) {
+    const target = ((i + 0.5) / total) * validLen;
+    let s = seg[seg.length - 1];
+    for (const cand of seg) {
+      if (target <= cand.startArc + cand.len) {
+        s = cand;
+        break;
       }
-      const f = seg.len > 1e-9 ? (target - seg.startArc) / seg.len : 0;
-      const a = sd.pts[seg.i0];
-      const b = sd.pts[seg.i1];
-      chairs.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, rotation: a.rot });
     }
-  });
+    const f = s.len > 1e-9 ? (target - s.startArc) / s.len : 0;
+    const a = contour[s.i0];
+    const b = contour[s.i1];
+    chairs.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, rotation: a.rot });
+  }
   return chairs;
 }

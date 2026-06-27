@@ -3,7 +3,7 @@ import { useStore, activeSheet } from "../../store";
 import type { EventType } from "../../types";
 import { useT, useI18n } from "../../i18n";
 import { useEscClose } from "../../utils/useEscClose";
-import { CHAIR_ICONS } from "../../iconmap";
+import { CHAIR_ICONS, EVENT_ICONS } from "../../iconmap";
 import { Icon } from "../Icon";
 import { IconSelect } from "./IconSelect";
 import { ConfirmModal } from "./ConfirmModal";
@@ -73,7 +73,7 @@ export function ProjectSettingsModal({ onClose }: Props) {
                   ariaLabel={t("event.type")}
                   value={project.eventType}
                   onChange={(v) => setProjectMeta({ eventType: v as EventType })}
-                  options={[{ value: "wedding", label: t("event.wedding") }]}
+                  options={[{ value: "wedding", label: t("event.wedding"), icon: EVENT_ICONS.wedding }]}
                 />
               </div>
               <label className="field">

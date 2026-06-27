@@ -7,11 +7,6 @@ import { defaultSnakePath } from "../../constants";
 import { CHAIR_ICONS, SHAPE_ICONS } from "../../iconmap";
 import { IconSelect } from "./IconSelect";
 
-const SNAKE_SIDES: { key: Side; labelKey: string }[] = [
-  { key: "right", labelKey: "snake.sideA" },
-  { key: "left", labelKey: "snake.sideB" },
-];
-
 const SIDES: { key: Side; labelKey: string }[] = [
   { key: "top", labelKey: "side.top" },
   { key: "right", labelKey: "side.right" },
@@ -64,10 +59,10 @@ export function TablePanel() {
   let spacing: number;
   let maxSeats: number;
   if (isSnake) {
-    const length = snakeLength(table.path ?? []);
-    const sidesOn = (table.disabledSides.includes("right") ? 0 : 1) + (table.disabledSides.includes("left") ? 0 : 1);
-    spacing = sidesOn > 0 && table.seatCount > 0 ? (length * sidesOn) / table.seatCount : Infinity;
-    maxSeats = minSpacing > 0 && sidesOn > 0 ? Math.floor((length * sidesOn) / minSpacing) : table.seatCount;
+    // Seats run all the way around the band ≈ both long sides (plus the small caps).
+    const seatLen = 2 * snakeLength(table.path ?? []);
+    spacing = table.seatCount > 0 ? seatLen / table.seatCount : Infinity;
+    maxSeats = minSpacing > 0 ? Math.floor(seatLen / minSpacing) : table.seatCount;
     tight = table.seatCount > 0 && spacing < minSpacing - 1e-9;
   } else {
     tight = isTight(table, minSpacing, welded);
@@ -162,18 +157,16 @@ export function TablePanel() {
             </label>
           </div>
         )}
-        {!isSnake && (
-          <label className="field">
-            <span>{t("table.rotation")}</span>
-            <input
-              type="number"
-              step={5}
-              disabled={locked}
-              value={table.rotation}
-              onChange={(e) => updateTable(table.id, { rotation: Number(e.target.value) % 360 })}
-            />
-          </label>
-        )}
+        <label className="field">
+          <span>{t("table.rotation")}</span>
+          <input
+            type="number"
+            step={5}
+            disabled={locked}
+            value={table.rotation}
+            onChange={(e) => updateTable(table.id, { rotation: Number(e.target.value) % 360 })}
+          />
+        </label>
       </section>
 
       <section className="panel-section">
@@ -223,25 +216,6 @@ export function TablePanel() {
                   </label>
                 );
               })}
-            </div>
-          </div>
-        )}
-
-        {isSnake && (
-          <div className="sides">
-            <span className="field-caption">{t("table.activeSides")}</span>
-            <div className="sides-grid">
-              {SNAKE_SIDES.map((s) => (
-                <label key={s.key} className="field-inline">
-                  <input
-                    type="checkbox"
-                    disabled={locked}
-                    checked={!table.disabledSides.includes(s.key)}
-                    onChange={(e) => toggleSide(s.key, e.target.checked)}
-                  />
-                  <span>{t(s.labelKey)}</span>
-                </label>
-              ))}
             </div>
           </div>
         )}

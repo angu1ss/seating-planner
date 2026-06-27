@@ -5,7 +5,9 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import type { SceneObject } from "../../types";
 import type { Palette } from "../../theme";
 import { ROUND_OBJECT_TYPES } from "../../constants";
+import { objectWallExtents, readableAngle } from "../../geometry";
 import { LockBadge } from "./LockBadge";
+import { useContextTrigger, type CtxPoint } from "../../utils/useContextTrigger";
 
 interface TransformPatch {
   w?: number;
@@ -26,6 +28,7 @@ interface Props {
   onSelect: (id: string, additive: boolean) => void;
   onMove: (id: string, x: number, y: number) => void;
   onTransform: (id: string, patch: TransformPatch) => void;
+  onContextMenu: (p: CtxPoint) => void;
   dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
 }
 
@@ -40,8 +43,10 @@ export function ObjectNode({
   onSelect,
   onMove,
   onTransform,
+  onContextMenu,
   dragBound,
 }: Props) {
+  const { handlers: ctx } = useContextTrigger(onContextMenu);
   const groupRef = useRef<Konva.Group>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const editable = soleSelected && !obj.locked;
@@ -56,6 +61,11 @@ export function ObjectNode({
   const wpx = obj.w * ppm;
   const hpx = obj.h * ppm;
   const isRound = ROUND_OBJECT_TYPES.includes(obj.type);
+  // Lock badge pinned to the top-right of the rotated footprint, upright.
+  const aabb = objectWallExtents(obj);
+  const badgeK = isRound ? Math.SQRT1_2 : 1;
+  const badgeX = aabb.right * ppm * badgeK;
+  const badgeY = -aabb.top * ppm * badgeK;
   const isDoor = obj.type === "entrance";
   const isColumn = obj.type === "columnRound" || obj.type === "columnSquare";
   const dashed = obj.type === "dancefloor";
@@ -97,6 +107,7 @@ export function ObjectNode({
         onTap={handleSelect}
         onDragEnd={(e) => onMove(obj.id, e.target.x() / ppm, e.target.y() / ppm)}
         onTransformEnd={handleTransformEnd}
+        {...ctx}
       >
         {isRound ? (
           <Ellipse
@@ -160,6 +171,7 @@ export function ObjectNode({
             height={hpx}
             offsetX={Math.max(wpx, 60) / 2}
             offsetY={hpx / 2}
+            rotation={readableAngle(obj.rotation) - obj.rotation}
             align="center"
             verticalAlign="middle"
             fontSize={12}
@@ -168,8 +180,12 @@ export function ObjectNode({
           />
         )}
 
-        {obj.locked && <LockBadge x={wpx / 2} y={-hpx / 2} />}
       </Group>
+      {obj.locked && (
+        <Group x={obj.x * ppm} y={obj.y * ppm} listening={false}>
+          <LockBadge x={badgeX} y={badgeY} />
+        </Group>
+      )}
 
       {editable && (
         <Transformer

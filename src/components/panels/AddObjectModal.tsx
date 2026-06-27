@@ -39,6 +39,7 @@ export function AddObjectModal({ onClose }: Props) {
       { type, w: Math.max(0.2, w), h: Math.max(0.2, h), label: label.trim() || undefined },
       Math.max(1, count),
     );
+    onClose();
   };
 
   const m = t("unit.m");

@@ -184,6 +184,7 @@ export interface EditorState extends ProjectState {
   removeGuest: (id: string) => void;
   assignGuestToSeat: (guestId: string, tableId: string, index: number) => void;
   unassignGuest: (guestId: string) => void;
+  removeSeatAt: (tableId: string, index: number) => void;
   setHighlightGuest: (id: string | null) => void;
   seatNearNewlyweds: (roles: GuestRole[]) => void;
 
@@ -275,6 +276,27 @@ export const useStore = create<EditorState>()(
           }),
         unassignGuest: (guestId) =>
           set((s) => ({ guests: s.guests.map((g) => (g.id === guestId ? { ...g, seat: null } : g)) })),
+        removeSeatAt: (tableId, index) =>
+          set((s) => {
+            const sheet = activeSheet(s);
+            const tbl = sheet.tables.find((t) => t.id === tableId);
+            if (!tbl || tbl.seatCount <= 0) return {};
+            // Clear the guest in this seat; shift higher seat indices down by one.
+            const guests = s.guests.map((g) => {
+              if (!g.seat || g.seat.tableId !== tableId) return g;
+              if (g.seat.index === index) return { ...g, seat: null };
+              if (g.seat.index > index) return { ...g, seat: { tableId, index: g.seat.index - 1 } };
+              return g;
+            });
+            return {
+              ...patchActive(s, {
+                tables: sheet.tables.map((t) =>
+                  t.id === tableId ? { ...t, seatCount: Math.max(0, t.seatCount - 1) } : t,
+                ),
+              }),
+              guests,
+            };
+          }),
         setHighlightGuest: (id) => set({ highlightGuestId: id }),
 
         seatNearNewlyweds: (roles) =>
@@ -757,7 +779,7 @@ export const useStore = create<EditorState>()(
                   rotation: (t.rotation + deg + 360) % 360,
                 };
               }
-              if (sel.has(t.id) && t.shape !== "snake") return { ...t, rotation: (t.rotation + deg + 360) % 360 };
+              if (sel.has(t.id)) return { ...t, rotation: (t.rotation + deg + 360) % 360 };
               return t;
             });
             // Keep each rotated group inside the walls by shifting it as a whole.
