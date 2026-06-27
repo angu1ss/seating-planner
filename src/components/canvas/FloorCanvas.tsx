@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { Stage, Layer, Rect, Line } from "react-konva";
+import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
+import { setExportStage } from "../../export/registry";
 import type { Side, TableModel } from "../../types";
 import { useStore, undo, redo, activeSheet, useCanUndo, useCanRedo } from "../../store";
 import { getPalette } from "../../theme";
@@ -699,6 +701,7 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     >
       {size.w > 0 && size.h > 0 && (
       <Stage
+        ref={(node: Konva.Stage | null) => setExportStage(node)}
         width={size.w}
         height={size.h}
         scaleX={scale}

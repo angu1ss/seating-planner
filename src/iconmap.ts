@@ -45,6 +45,7 @@ import {
   faChevronDown,
   faKeyboard,
   faBezierCurve,
+  faFilePdf,
 } from "@fortawesome/pro-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import type {
@@ -83,7 +84,8 @@ export type UiIconName =
   | "unweld"
   | "guests"
   | "chevron"
-  | "keyboard";
+  | "keyboard"
+  | "pdf";
 
 export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   import: faFileImport,
@@ -111,6 +113,7 @@ export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   guests: faUsers,
   chevron: faChevronDown,
   keyboard: faKeyboard,
+  pdf: faFilePdf,
 };
 
 export const OBJECT_ICONS: Record<SceneObjectType, IconDefinition> = {

@@ -13,6 +13,8 @@ import { AddObjectModal } from "./components/panels/AddObjectModal";
 import { ShortcutsModal } from "./components/panels/ShortcutsModal";
 import { ProjectSettingsModal } from "./components/panels/ProjectSettingsModal";
 import { WelcomeModal } from "./components/panels/WelcomeModal";
+import { ExportModal } from "./components/panels/ExportModal";
+import { preparePlanPages, type PlanPage } from "./export/plan";
 import { GuestsPanel } from "./components/panels/GuestsPanel";
 import { LegendModal } from "./components/panels/LegendModal";
 import { FloorCanvas } from "./components/canvas/FloorCanvas";
@@ -32,7 +34,10 @@ export default function App() {
   const [legendOpen, setLegendOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guestsOpen, setGuestsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [printPages, setPrintPages] = useState<PlanPage[] | null>(null);
+  const printing = useRef(false);
 
   const isDesktop = useMediaQuery("(min-width: 721px)");
   const [guestsWidth, setGuestsWidth] = useState(() => {
@@ -87,6 +92,41 @@ export default function App() {
     setWelcomeOpen(false);
   };
 
+  // Ctrl/Cmd+P prints the floor plan (one hall per page) instead of the raw page.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "p") return;
+      e.preventDefault();
+      if (printing.current) return;
+      printing.current = true;
+      preparePlanPages((i) => `${t("left.hall")} ${i + 1}`)
+        .then((pages) => {
+          if (pages.length) setPrintPages(pages);
+          else printing.current = false;
+        })
+        .catch(() => {
+          printing.current = false;
+        });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [t]);
+
+  // Once the print pages render, open the browser print dialog, then clean up.
+  useEffect(() => {
+    if (!printPages) return;
+    const done = () => {
+      setPrintPages(null);
+      printing.current = false;
+    };
+    window.addEventListener("afterprint", done, { once: true });
+    const id = window.setTimeout(() => window.print(), 80);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener("afterprint", done);
+    };
+  }, [printPages]);
+
   useEffect(() => {
     const name = projectName.trim() || t("project.untitled");
     document.title = `${name} — ${t("app.fullName")}`;
@@ -108,11 +148,13 @@ export default function App() {
   else propsPanel = <BulkPanel />;
 
   return (
+    <>
     <div className="app">
       <Toolbar
         onToggleLeft={() => setLeftOpen((v) => !v)}
         onToggleGuests={() => setGuestsOpen((v) => !v)}
         onSettings={() => setSettingsOpen(true)}
+        onExport={() => setExportOpen(true)}
         showLeftToggle={leftDrawer}
       />
       <div className="body">
@@ -158,7 +200,19 @@ export default function App() {
       {helpOpen && <ShortcutsModal onClose={() => setHelpOpen(false)} />}
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
       {settingsOpen && <ProjectSettingsModal onClose={() => setSettingsOpen(false)} />}
+      {exportOpen && <ExportModal onClose={() => setExportOpen(false)} />}
       {welcomeOpen && <WelcomeModal onClose={closeWelcome} />}
     </div>
+    {printPages && (
+      <div className="print-root" aria-hidden="true">
+        {printPages.map((p, i) => (
+          <section className="print-page" key={i}>
+            <h2 className="print-title">{p.name}</h2>
+            <img src={p.dataUrl} alt="" />
+          </section>
+        ))}
+      </div>
+    )}
+    </>
   );
 }
