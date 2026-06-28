@@ -55,7 +55,7 @@ export function ShareModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal share-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div className="modal copy-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modal-head">
           <h2>{t("share.title")}</h2>
           <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}>
@@ -68,10 +68,10 @@ export function ShareModal({ onClose }: { onClose: () => void }) {
             <p className="muted">{t("share.error")}</p>
           ) : (
             <>
-              <div className="share-row">
+              <div className="copy-row">
                 <input
                   ref={inputRef}
-                  className="share-link"
+                  className="copy-field"
                   type="text"
                   readOnly
                   value={link}
@@ -83,7 +83,7 @@ export function ShareModal({ onClose }: { onClose: () => void }) {
                   <span>{copied ? t("share.copied") : t("share.copy")}</span>
                 </button>
               </div>
-              <p className="muted share-hint">{t("share.hint")}</p>
+              <p className="muted copy-hint">{t("share.hint")}</p>
             </>
           )}
         </div>

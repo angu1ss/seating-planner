@@ -41,7 +41,7 @@ export function ShareLoadModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal share-load-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div className="modal link-load-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modal-head">
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}>
