@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { Group, Rect, Ellipse, Text, Shape, Transformer } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -7,6 +7,7 @@ import type { Palette } from "../../theme";
 import { ROUND_OBJECT_TYPES } from "../../constants";
 import { objectWallExtents, readableAngle } from "../../geometry";
 import { LockBadge } from "./LockBadge";
+import { makeDragBound } from "./dragBound";
 import { useContextTrigger, type CtxPoint } from "../../utils/useContextTrigger";
 
 interface TransformPatch {
@@ -28,11 +29,12 @@ interface Props {
   onSelect: (id: string, additive: boolean) => void;
   onMove: (id: string, x: number, y: number) => void;
   onTransform: (id: string, patch: TransformPatch) => void;
-  onContextMenu: (p: CtxPoint) => void;
-  dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
+  onContextMenu: (id: string, p: CtxPoint) => void;
+  venueWidth: number;
+  venueHeight: number;
 }
 
-export function ObjectNode({
+export const ObjectNode = memo(function ObjectNode({
   obj,
   selected,
   soleSelected,
@@ -44,10 +46,15 @@ export function ObjectNode({
   onMove,
   onTransform,
   onContextMenu,
-  dragBound,
+  venueWidth,
+  venueHeight,
 }: Props) {
-  const { handlers: ctx } = useContextTrigger(onContextMenu);
   const groupRef = useRef<Konva.Group>(null);
+  const { handlers: ctx } = useContextTrigger((p) => onContextMenu(obj.id, p));
+  const dragBound = useMemo(
+    () => makeDragBound(() => groupRef.current?.getStage() ?? null, objectWallExtents(obj), venueWidth, venueHeight, ppm),
+    [obj, venueWidth, venueHeight, ppm],
+  );
   const trRef = useRef<Konva.Transformer>(null);
   const editable = soleSelected && !obj.locked;
 
@@ -200,4 +207,4 @@ export function ObjectNode({
       )}
     </>
   );
-}
+});

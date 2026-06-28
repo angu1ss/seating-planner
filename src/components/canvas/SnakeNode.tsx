@@ -1,12 +1,14 @@
-import { useRef } from "react";
+import { memo, useMemo, useRef } from "react";
 import { Group, Circle, Line, Text } from "react-konva";
+import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, TableModel } from "../../types";
-import { computeSnakeChairs, readableAngle, snakeCenterline, snakeLength } from "../../geometry";
+import { computeSnakeChairs, readableAngle, snakeCenterline, snakeLength, tableWallExtents } from "../../geometry";
 import type { Palette } from "../../theme";
 import { useT } from "../../i18n";
 import { Chair, type Occupant } from "./Chair";
 import { LockBadge } from "./LockBadge";
+import { makeDragBound } from "./dragBound";
 import { useContextTrigger, type CtxPoint } from "../../utils/useContextTrigger";
 
 interface Props {
@@ -22,7 +24,7 @@ interface Props {
   occupants: Record<number, Occupant>;
   highlightIndex: number | null;
   onSeatClick: (tableId: string, index: number) => void;
-  onSeatContextMenu: (index: number, p: CtxPoint) => void;
+  onSeatContextMenu: (tableId: string, index: number, p: CtxPoint) => void;
   onSeatHover?: (tip: string, clientX: number, clientY: number) => void;
   onSeatHoverEnd?: () => void;
   onSelect: (id: string, additive: boolean) => void;
@@ -33,12 +35,13 @@ interface Props {
   onNodeCommit: (id: string) => void;
   onAddNode: (id: string, x: number, y: number) => void;
   onRemoveNode: (id: string, index: number) => void;
-  onContextMenu: (p: CtxPoint) => void;
-  onNodeContextMenu: (index: number, p: CtxPoint) => void;
-  dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
+  onContextMenu: (id: string, p: CtxPoint) => void;
+  onNodeContextMenu: (id: string, index: number, p: CtxPoint) => void;
+  venueWidth: number;
+  venueHeight: number;
 }
 
-export function SnakeNode({
+export const SnakeNode = memo(function SnakeNode({
   table,
   selected,
   soleSelected,
@@ -64,10 +67,16 @@ export function SnakeNode({
   onRemoveNode,
   onContextMenu,
   onNodeContextMenu,
-  dragBound,
+  venueWidth,
+  venueHeight,
 }: Props) {
   const t = useT();
-  const { handlers: ctx } = useContextTrigger(onContextMenu);
+  const groupRef = useRef<Konva.Group>(null);
+  const { handlers: ctx } = useContextTrigger((p) => onContextMenu(table.id, p));
+  const dragBound = useMemo(
+    () => makeDragBound(() => groupRef.current?.getStage() ?? null, tableWallExtents(table), venueWidth, venueHeight, ppm),
+    [table, venueWidth, venueHeight, ppm],
+  );
   const nodeLp = useRef<number | null>(null);
   const cancelNodeLp = () => {
     if (nodeLp.current !== null) {
@@ -142,6 +151,7 @@ export function SnakeNode({
   return (
     <>
     <Group
+      ref={groupRef}
       x={table.x * ppm}
       y={table.y * ppm}
       rotation={table.rotation}
@@ -169,7 +179,7 @@ export function SnakeNode({
           highlighted={i === highlightIndex}
           tableRotation={table.rotation}
           onClick={() => onSeatClick(table.id, i)}
-          onContextMenu={(p) => onSeatContextMenu(i, p)}
+          onContextMenu={(p) => onSeatContextMenu(table.id, i, p)}
           onHover={onSeatHover}
           onHoverEnd={onSeatHoverEnd}
         />
@@ -257,7 +267,7 @@ export function SnakeNode({
             onContextMenu={(e) => {
               e.evt.preventDefault();
               e.cancelBubble = true;
-              onNodeContextMenu(i, { x: e.evt.clientX, y: e.evt.clientY });
+              onNodeContextMenu(table.id, i, { x: e.evt.clientX, y: e.evt.clientY });
             }}
             onTouchStart={(e) => {
               e.cancelBubble = true;
@@ -265,7 +275,7 @@ export function SnakeNode({
               if (!tp) return;
               const pt = { x: tp.clientX, y: tp.clientY };
               cancelNodeLp();
-              nodeLp.current = window.setTimeout(() => onNodeContextMenu(i, pt), 500);
+              nodeLp.current = window.setTimeout(() => onNodeContextMenu(table.id, i, pt), 500);
             }}
             onTouchMove={cancelNodeLp}
             onTouchEnd={cancelNodeLp}
@@ -279,4 +289,4 @@ export function SnakeNode({
     )}
     </>
   );
-}
+});

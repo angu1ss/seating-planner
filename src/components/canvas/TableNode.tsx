@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { Group, Rect, Ellipse, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ChairStyle, Side, TableModel } from "../../types";
-import { computeChairs, isTight, objectWallExtents, readableAngle } from "../../geometry";
+import { computeChairs, isTight, objectWallExtents, readableAngle, tableWallExtents } from "../../geometry";
+import { makeDragBound } from "./dragBound";
 import type { Palette } from "../../theme";
 import { useT } from "../../i18n";
 import { Chair, type Occupant } from "./Chair";
@@ -32,7 +33,7 @@ interface Props {
   occupants: Record<number, Occupant>;
   highlightIndex: number | null;
   onSeatClick: (tableId: string, index: number) => void;
-  onSeatContextMenu: (index: number, p: CtxPoint) => void;
+  onSeatContextMenu: (tableId: string, index: number, p: CtxPoint) => void;
   onSeatHover?: (tip: string, clientX: number, clientY: number) => void;
   onSeatHoverEnd?: () => void;
   onSelect: (id: string, additive: boolean) => void;
@@ -40,13 +41,14 @@ interface Props {
   onDragMove: (id: string, x: number, y: number) => void;
   onMove: (id: string, x: number, y: number) => void;
   onTransform: (id: string, patch: TransformPatch) => void;
-  onContextMenu: (p: CtxPoint) => void;
-  dragBound: (pos: { x: number; y: number }) => { x: number; y: number };
+  onContextMenu: (id: string, p: CtxPoint) => void;
+  venueWidth: number;
+  venueHeight: number;
 }
 
 const PODIUM_HALO = 0.14; // meters
 
-export function TableNode({
+export const TableNode = memo(function TableNode({
   table,
   selected,
   soleSelected,
@@ -69,11 +71,16 @@ export function TableNode({
   onMove,
   onTransform,
   onContextMenu,
-  dragBound,
+  venueWidth,
+  venueHeight,
 }: Props) {
   const t = useT();
-  const { handlers: ctx } = useContextTrigger(onContextMenu);
   const groupRef = useRef<Konva.Group>(null);
+  const { handlers: ctx } = useContextTrigger((p) => onContextMenu(table.id, p));
+  const dragBound = useMemo(
+    () => makeDragBound(() => groupRef.current?.getStage() ?? null, tableWallExtents(table), venueWidth, venueHeight, ppm),
+    [table, venueWidth, venueHeight, ppm],
+  );
   const trRef = useRef<Konva.Transformer>(null);
   const editable = soleSelected && !table.locked;
 
@@ -165,7 +172,7 @@ export function TableNode({
           highlighted={i === highlightIndex}
           tableRotation={table.rotation}
           onClick={() => onSeatClick(table.id, i)}
-          onContextMenu={(p) => onSeatContextMenu(i, p)}
+          onContextMenu={(p) => onSeatContextMenu(table.id, i, p)}
           onHover={onSeatHover}
           onHoverEnd={onSeatHoverEnd}
         />
@@ -258,4 +265,4 @@ export function TableNode({
       )}
     </>
   );
-}
+});

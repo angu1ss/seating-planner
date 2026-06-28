@@ -45,6 +45,8 @@ const NO_SIDES: Side[] = [];
 const GUEST_DRAG_TYPE = "application/x-guest-id";
 const SEAT_DROP_RADIUS = 0.55; // meters: how close a drop must be to a chair
 
+type NodeTransformPatch = { w?: number; h?: number; x?: number; y?: number; rotation?: number };
+
 function occupantOf(g: Guest): Occupant {
   return {
     initials: initials(g.name),
@@ -464,19 +466,6 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     }
   };
 
-  const makeDragBound = (table: TableModel) => (absPos: { x: number; y: number }) => {
-    const e = tableWallExtents(table);
-    const minX = e.left;
-    const maxX = Math.max(e.left, venue.width - e.right);
-    const minY = e.top;
-    const maxY = Math.max(e.top, venue.height - e.bottom);
-    const mx = (absPos.x - pos.x) / scale / PPM;
-    const my = (absPos.y - pos.y) / scale / PPM;
-    const cx = Math.min(Math.max(minX, mx), maxX);
-    const cy = Math.min(Math.max(minY, my), maxY);
-    return { x: cx * PPM * scale + pos.x, y: cy * PPM * scale + pos.y };
-  };
-
   const clampAxisLo = (c: number, lo: number, hi: number) =>
     Number(Math.min(Math.max(lo, c), Math.max(lo, hi)).toFixed(3));
 
@@ -527,20 +516,6 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
       rotation,
     });
   };
-
-  const makeObjectDragBound =
-    (obj: { w: number; h: number; rotation: number }) => (absPos: { x: number; y: number }) => {
-      const e = objectWallExtents(obj);
-      const minX = e.left;
-      const maxX = Math.max(e.left, venue.width - e.right);
-      const minY = e.top;
-      const maxY = Math.max(e.top, venue.height - e.bottom);
-      const mx = (absPos.x - pos.x) / scale / PPM;
-      const my = (absPos.y - pos.y) / scale / PPM;
-      const cx = Math.min(Math.max(minX, mx), maxX);
-      const cy = Math.min(Math.max(minY, my), maxY);
-      return { x: cx * PPM * scale + pos.x, y: cy * PPM * scale + pos.y };
-    };
 
   const isSole = (id: string) => selectedIds.length === 1 && selectedIds[0] === id;
 
@@ -613,6 +588,50 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
       ],
     });
   };
+
+  // Stable callback identities for the memoised canvas nodes. The handlers above close
+  // over current state, so route through a ref refreshed each render — the identities
+  // handed to the nodes never change, so unchanged nodes skip re-rendering.
+  const impRef = useRef({
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleTableTransform,
+    handleObjectMove,
+    handleObjectTransform,
+    openTableMenu,
+    openObjectMenu,
+    openSeatMenu,
+    openSnakeNodeMenu,
+  });
+  impRef.current = {
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleTableTransform,
+    handleObjectMove,
+    handleObjectTransform,
+    openTableMenu,
+    openObjectMenu,
+    openSeatMenu,
+    openSnakeNodeMenu,
+  };
+  const cb = useMemo(
+    () => ({
+      seatClick: (tableId: string, index: number) => setPickSeat({ tableId, index }),
+      seatCtx: (tableId: string, index: number, p: CtxPoint) => impRef.current.openSeatMenu(tableId, index, p),
+      dragStart: (id: string) => impRef.current.handleDragStart(id),
+      dragMove: (id: string, x: number, y: number) => impRef.current.handleDragMove(id, x, y),
+      dragEnd: (id: string, x: number, y: number) => impRef.current.handleDragEnd(id, x, y),
+      tableTransform: (id: string, patch: NodeTransformPatch) => impRef.current.handleTableTransform(id, patch),
+      tableCtx: (id: string, p: CtxPoint) => impRef.current.openTableMenu(id, p),
+      snakeNodeCtx: (id: string, index: number, p: CtxPoint) => impRef.current.openSnakeNodeMenu(id, index, p),
+      objMove: (id: string, x: number, y: number) => impRef.current.handleObjectMove(id, x, y),
+      objTransform: (id: string, patch: NodeTransformPatch) => impRef.current.handleObjectTransform(id, patch),
+      objCtx: (id: string, p: CtxPoint) => impRef.current.openObjectMenu(id, p),
+    }),
+    [setPickSeat],
+  );
 
   // Space-to-pan toggle.
   useEffect(() => {
@@ -884,11 +903,12 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
               ppm={PPM}
               palette={palette}
               label={o.label.trim() || t(objectLabelKey(o.type))}
+              venueWidth={venue.width}
+              venueHeight={venue.height}
               onSelect={select}
-              onMove={handleObjectMove}
-              onTransform={handleObjectTransform}
-              onContextMenu={(p) => openObjectMenu(o.id, p)}
-              dragBound={makeObjectDragBound(o)}
+              onMove={cb.objMove}
+              onTransform={cb.objTransform}
+              onContextMenu={cb.objCtx}
             />
           ))}
           {tables.map((tbl) =>
@@ -906,21 +926,22 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
                 minSpacing={settings.minSeatSpacing}
                 occupants={occupantsByTable.get(tbl.id) ?? NO_OCCUPANTS}
                 highlightIndex={highlightSeat && highlightSeat.tableId === tbl.id ? highlightSeat.index : null}
-                onSeatClick={(tableId, index) => setPickSeat({ tableId, index })}
-                onSeatContextMenu={(index, p) => openSeatMenu(tbl.id, index, p)}
+                venueWidth={venue.width}
+                venueHeight={venue.height}
+                onSeatClick={cb.seatClick}
+                onSeatContextMenu={cb.seatCtx}
                 onSeatHover={coarse ? undefined : onSeatHover}
                 onSeatHoverEnd={coarse ? undefined : onSeatHoverEnd}
                 onSelect={select}
-                onDragStartTable={handleDragStart}
-                onDragMove={handleDragMove}
-                onMove={handleDragEnd}
+                onDragStartTable={cb.dragStart}
+                onDragMove={cb.dragMove}
+                onMove={cb.dragEnd}
                 onNodeDrag={moveSnakeNode}
                 onNodeCommit={commitSnakeNode}
                 onAddNode={addSnakeNode}
                 onRemoveNode={removeSnakeNode}
-                onContextMenu={(p) => openTableMenu(tbl.id, p)}
-                onNodeContextMenu={(index, p) => openSnakeNodeMenu(tbl.id, index, p)}
-                dragBound={makeDragBound(tbl)}
+                onContextMenu={cb.tableCtx}
+                onNodeContextMenu={cb.snakeNodeCtx}
               />
             ) : (
               <TableNode
@@ -937,17 +958,18 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
                 weldedSides={weldedSidesByTable[tbl.id] ?? NO_SIDES}
                 occupants={occupantsByTable.get(tbl.id) ?? NO_OCCUPANTS}
                 highlightIndex={highlightSeat && highlightSeat.tableId === tbl.id ? highlightSeat.index : null}
-                onSeatClick={(tableId, index) => setPickSeat({ tableId, index })}
-                onSeatContextMenu={(index, p) => openSeatMenu(tbl.id, index, p)}
+                venueWidth={venue.width}
+                venueHeight={venue.height}
+                onSeatClick={cb.seatClick}
+                onSeatContextMenu={cb.seatCtx}
                 onSeatHover={coarse ? undefined : onSeatHover}
                 onSeatHoverEnd={coarse ? undefined : onSeatHoverEnd}
                 onSelect={select}
-                onDragStartTable={handleDragStart}
-                onDragMove={handleDragMove}
-                onMove={handleDragEnd}
-                onTransform={handleTableTransform}
-                onContextMenu={(p) => openTableMenu(tbl.id, p)}
-                dragBound={makeDragBound(tbl)}
+                onDragStartTable={cb.dragStart}
+                onDragMove={cb.dragMove}
+                onMove={cb.dragEnd}
+                onTransform={cb.tableTransform}
+                onContextMenu={cb.tableCtx}
               />
             ),
           )}
