@@ -49,15 +49,19 @@ export async function preparePlanPages(fallbackHall: (index: number) => string):
   const sheets = useStore.getState().sheets;
   const original = useStore.getState().activeSheetId;
   const pages: PlanPage[] = [];
-  for (let i = 0; i < sheets.length; i++) {
-    const sheet = sheets[i];
-    useStore.getState().setActiveSheet(sheet.id);
+  try {
+    for (let i = 0; i < sheets.length; i++) {
+      const sheet = sheets[i];
+      useStore.getState().setActiveSheet(sheet.id);
+      await nextFrame();
+      await nextFrame();
+      const dataUrl = captureActive({ width: sheet.venue.width, height: sheet.venue.height });
+      if (dataUrl) pages.push({ name: sheet.name.trim() || fallbackHall(i), dataUrl });
+    }
+  } finally {
+    // Always return to the hall the user was on, even if a capture throws.
+    useStore.getState().setActiveSheet(original);
     await nextFrame();
-    await nextFrame();
-    const dataUrl = captureActive({ width: sheet.venue.width, height: sheet.venue.height });
-    if (dataUrl) pages.push({ name: sheet.name.trim() || fallbackHall(i), dataUrl });
   }
-  useStore.getState().setActiveSheet(original);
-  await nextFrame();
   return pages;
 }

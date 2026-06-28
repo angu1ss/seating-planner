@@ -4,14 +4,19 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import type { ChairStyle } from "../../types";
 import type { ChairPos } from "../../geometry";
 import { CHAIR_RADIUS } from "../../constants";
-import type { CornerBadges } from "../../iconmap";
+import { iconLabelKey, type CornerBadges } from "../../iconmap";
 import type { Palette } from "../../theme";
+import { useT } from "../../i18n";
 import { useContextTrigger, type CtxPoint } from "../../utils/useContextTrigger";
+
+type HoverFn = (text: string, clientX: number, clientY: number) => void;
 
 export interface Occupant {
   initials: string;
   bg: string;
   badges: CornerBadges;
+  /** Guest's full name — shown when hovering the seat body (desktop). */
+  name: string;
 }
 
 interface Props {
@@ -25,18 +30,55 @@ interface Props {
   tableRotation: number;
   onClick: () => void;
   onContextMenu?: (p: CtxPoint) => void;
+  /** Desktop hover tooltip with the occupant's name (no-op when the seat is empty). */
+  onHover?: (tip: string, clientX: number, clientY: number) => void;
+  onHoverEnd?: () => void;
 }
 
 /** A small FA icon on a white disc. `rot` keeps the icon upright while it sits at a
  * (possibly rotated) corner. */
-function Badge({ def, x, y, r, rot }: { def: IconDefinition; x: number; y: number; r: number; rot: number }) {
+function Badge({
+  def,
+  x,
+  y,
+  r,
+  rot,
+  label,
+  onHover,
+  onHoverEnd,
+}: {
+  def: IconDefinition;
+  x: number;
+  y: number;
+  r: number;
+  rot: number;
+  label?: string;
+  onHover?: HoverFn;
+  onHoverEnd?: () => void;
+}) {
   const [w, h, , , path] = def.icon;
   const d = Array.isArray(path) ? path.join(" ") : path;
   const s = (r * 1.25) / Math.max(w, h);
+  // When the badge has its own tooltip it must listen and swallow the event so the
+  // seat-body hover (guest name) doesn't override the property name.
+  const hover =
+    label && onHover
+      ? {
+          onMouseEnter: (e: KonvaEventObject<MouseEvent>) => {
+            e.cancelBubble = true;
+            onHover(label, e.evt.clientX, e.evt.clientY);
+          },
+          onMouseMove: (e: KonvaEventObject<MouseEvent>) => {
+            e.cancelBubble = true;
+            onHover(label, e.evt.clientX, e.evt.clientY);
+          },
+          onMouseLeave: () => onHoverEnd?.(),
+        }
+      : {};
   return (
-    <Group x={x} y={y} rotation={rot} listening={false}>
-      <Circle radius={r} fill="#fff" stroke="rgba(0,0,0,0.3)" strokeWidth={0.5} />
-      <Path data={d} fill="#1b2638" scaleX={s} scaleY={s} offsetX={w / 2} offsetY={h / 2} />
+    <Group x={x} y={y} rotation={rot} listening={Boolean(label && onHover)} {...hover}>
+      <Circle radius={r} fill="#fff" stroke="rgba(0,0,0,0.3)" strokeWidth={0.5} perfectDrawEnabled={false} shadowForStrokeEnabled={false} />
+      <Path data={d} fill="#1b2638" scaleX={s} scaleY={s} offsetX={w / 2} offsetY={h / 2} perfectDrawEnabled={false} listening={false} />
     </Group>
   );
 }
@@ -53,10 +95,28 @@ export function Chair({
   tableRotation,
   onClick,
   onContextMenu,
+  onHover,
+  onHoverEnd,
 }: Props) {
+  const t = useT();
   const r = CHAIR_RADIUS * ppm;
   const fill = occupant ? occupant.bg : palette.chairFill;
   const { handlers: ctx, fired } = useContextTrigger(onContextMenu ?? (() => {}), true);
+  // Seat body → guest name; individual badges show their own property name (below).
+  const hoverHandlers =
+    occupant && onHover
+      ? {
+          onMouseEnter: (e: KonvaEventObject<MouseEvent>) =>
+            onHover(occupant.name, e.evt.clientX, e.evt.clientY),
+          onMouseMove: (e: KonvaEventObject<MouseEvent>) =>
+            onHover(occupant.name, e.evt.clientX, e.evt.clientY),
+          onMouseLeave: () => onHoverEnd?.(),
+        }
+      : {};
+  const labelFor = (def: IconDefinition) => {
+    const key = iconLabelKey(def);
+    return key ? t(key) : undefined;
+  };
   const handle = (e: KonvaEventObject<Event>) => {
     e.cancelBubble = true;
     // Swallow the tap/click that follows a long-press (which already opened the menu).
@@ -69,7 +129,10 @@ export function Chair({
   const br = r * 0.44; // badge radius
   const off = r * 0.8; // corner offset
   // Shrink the initials so up to 4 letters fit inside the chair.
-  const initFont = occupant ? Math.min(r * 1.25, (1.75 * r) / Math.max(1, occupant.initials.length * 0.62)) : r;
+  // Shrink to fit a SINGLE line inside the chair (the Text uses wrap="none").
+  const initFont = occupant
+    ? Math.min(r * 1.1, (r * 1.62) / Math.max(1, occupant.initials.length * 0.62))
+    : r;
 
   // Letters & icons always read parallel to the screen (counter the table's rotation).
   // Square shape itself keeps tilting with the table; its corner badges follow the
@@ -86,12 +149,12 @@ export function Chair({
   const cBL = corner(-off, off);
 
   return (
-    <Group x={c.x * ppm} y={c.y * ppm} onClick={handle} onTap={handle} {...(onContextMenu ? ctx : {})}>
+    <Group x={c.x * ppm} y={c.y * ppm} onClick={handle} onTap={handle} {...hoverHandlers} {...(onContextMenu ? ctx : {})}>
       {highlighted && (
         <Circle radius={r * 1.55} stroke={palette.tableSelected} strokeWidth={2.5} listening={false} />
       )}
       {chairStyle === "round" ? (
-        <Circle radius={r} fill={fill} stroke={palette.chairStroke} strokeWidth={1} />
+        <Circle radius={r} fill={fill} stroke={palette.chairStroke} strokeWidth={1} perfectDrawEnabled={false} shadowForStrokeEnabled={false} />
       ) : (
         <Rect
           width={r * 2}
@@ -103,6 +166,8 @@ export function Chair({
           fill={fill}
           stroke={palette.chairStroke}
           strokeWidth={1}
+          perfectDrawEnabled={false}
+          shadowForStrokeEnabled={false}
         />
       )}
 
@@ -115,15 +180,16 @@ export function Chair({
             offsetY={initFont * 0.55}
             rotation={counter}
             align="center"
+            wrap="none"
             fontSize={initFont}
             fontStyle="700"
             fill="#16243a"
             listening={false}
           />
-          {occupant.badges.tl && <Badge def={occupant.badges.tl} x={cTL.x} y={cTL.y} r={br} rot={counter} />}
-          {occupant.badges.tr && <Badge def={occupant.badges.tr} x={cTR.x} y={cTR.y} r={br} rot={counter} />}
-          {occupant.badges.br && <Badge def={occupant.badges.br} x={cBR.x} y={cBR.y} r={br} rot={counter} />}
-          {occupant.badges.bl && <Badge def={occupant.badges.bl} x={cBL.x} y={cBL.y} r={br} rot={counter} />}
+          {occupant.badges.tl && <Badge def={occupant.badges.tl} x={cTL.x} y={cTL.y} r={br} rot={counter} label={labelFor(occupant.badges.tl)} onHover={onHover} onHoverEnd={onHoverEnd} />}
+          {occupant.badges.tr && <Badge def={occupant.badges.tr} x={cTR.x} y={cTR.y} r={br} rot={counter} label={labelFor(occupant.badges.tr)} onHover={onHover} onHoverEnd={onHoverEnd} />}
+          {occupant.badges.br && <Badge def={occupant.badges.br} x={cBR.x} y={cBR.y} r={br} rot={counter} label={labelFor(occupant.badges.br)} onHover={onHover} onHoverEnd={onHoverEnd} />}
+          {occupant.badges.bl && <Badge def={occupant.badges.bl} x={cBL.x} y={cBL.y} r={br} rot={counter} label={labelFor(occupant.badges.bl)} onHover={onHover} onHoverEnd={onHoverEnd} />}
         </>
       )}
     </Group>

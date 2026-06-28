@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent as ReactDragEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { Stage, Layer, Rect, Line } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -50,6 +50,7 @@ function occupantOf(g: Guest): Occupant {
     initials: initials(g.name),
     bg: g.sex ? SEX_COLOR[g.sex] : NEUTRAL_SEAT,
     badges: guestBadges(g),
+    name: g.name,
   };
 }
 
@@ -103,6 +104,7 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   const [marquee, setMarquee] = useState<Marquee | null>(null);
   const [pickSeat, setPickSeat] = useState<{ tableId: string; index: number } | null>(null);
   const [menu, setMenu] = useState<CtxMenuSpec | null>(null);
+  const [seatTip, setSeatTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const middlePan = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
   const didFit = useRef(false);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
@@ -116,6 +118,13 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
   const [coarse] = useState(
     () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches,
   );
+
+  // Desktop-only chair tooltip (skip on touch). Stable callbacks so memoised nodes hold.
+  const onSeatHover = useCallback(
+    (text: string, x: number, y: number) => setSeatTip({ text, x, y }),
+    [],
+  );
+  const onSeatHoverEnd = useCallback(() => setSeatTip(null), []);
 
   const venue = useStore((s) => activeSheet(s).venue);
   const tables = useStore((s) => activeSheet(s).tables);
@@ -724,32 +733,40 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const tooCloseSet = tooCloseTables(tables);
+  // O(n²) proximity sweep — only depends on the tables, so don't recompute on
+  // zoom/pan/marquee/selection changes.
+  const tooCloseSet = useMemo(() => tooCloseTables(tables), [tables]);
 
   // Sides of each welded table that touch a group neighbour (no chairs drawn there).
-  const groupMembers = new Map<string, TableModel[]>();
-  for (const tb of tables) {
-    if (!tb.groupId) continue;
-    const arr = groupMembers.get(tb.groupId);
-    if (arr) arr.push(tb);
-    else groupMembers.set(tb.groupId, [tb]);
-  }
-  const weldedSidesByTable: Record<string, Side[]> = {};
-  for (const tb of tables) {
-    if (tb.groupId) weldedSidesByTable[tb.id] = weldedSidesFor(tb, groupMembers.get(tb.groupId)!);
-  }
+  const weldedSidesByTable = useMemo(() => {
+    const groupMembers = new Map<string, TableModel[]>();
+    for (const tb of tables) {
+      if (!tb.groupId) continue;
+      const arr = groupMembers.get(tb.groupId);
+      if (arr) arr.push(tb);
+      else groupMembers.set(tb.groupId, [tb]);
+    }
+    const byTable: Record<string, Side[]> = {};
+    for (const tb of tables) {
+      if (tb.groupId) byTable[tb.id] = weldedSidesFor(tb, groupMembers.get(tb.groupId)!);
+    }
+    return byTable;
+  }, [tables]);
 
   // Which guest sits at each chair (by table id → seat index → occupant), for the active hall.
-  const occupantsByTable = new Map<string, Record<number, Occupant>>();
-  for (const g of guests) {
-    if (!g.seat) continue;
-    let rec = occupantsByTable.get(g.seat.tableId);
-    if (!rec) {
-      rec = {};
-      occupantsByTable.set(g.seat.tableId, rec);
+  const occupantsByTable = useMemo(() => {
+    const map = new Map<string, Record<number, Occupant>>();
+    for (const g of guests) {
+      if (!g.seat) continue;
+      let rec = map.get(g.seat.tableId);
+      if (!rec) {
+        rec = {};
+        map.set(g.seat.tableId, rec);
+      }
+      rec[g.seat.index] = occupantOf(g);
     }
-    rec[g.seat.index] = occupantOf(g);
-  }
+    return map;
+  }, [guests]);
 
   const hlGuest = highlightGuestId ? guests.find((g) => g.id === highlightGuestId) : null;
   const highlightSeat = hlGuest?.seat ?? null;
@@ -760,7 +777,9 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     for (const tbl of tables) {
       const local =
         tbl.shape === "snake" ? computeSnakeChairs(tbl) : computeChairs(tbl, weldedSidesByTable[tbl.id] ?? NO_SIDES);
-      const rad = tbl.shape === "snake" ? 0 : (tbl.rotation * Math.PI) / 180;
+      // Snake chairs are computed in local (unrotated) coords like rect/ellipse, so apply
+      // the table rotation for every shape — otherwise drops onto a rotated snake miss.
+      const rad = (tbl.rotation * Math.PI) / 180;
       const cos = Math.cos(rad);
       const sin = Math.sin(rad);
       for (let i = 0; i < local.length; i++) {
@@ -790,15 +809,18 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
     if (hit) assignGuestToSeat(guestId, hit.tableId, hit.index);
   };
 
-  // Grid lines within the venue.
-  const gridLines: number[][] = [];
-  const step = venue.gridStep || 0.5;
-  for (let gx = 0; gx <= venue.width + 1e-6; gx += step) {
-    gridLines.push([gx * PPM, 0, gx * PPM, venue.height * PPM]);
-  }
-  for (let gy = 0; gy <= venue.height + 1e-6; gy += step) {
-    gridLines.push([0, gy * PPM, venue.width * PPM, gy * PPM]);
-  }
+  // Grid lines within the venue — depend only on venue size + step.
+  const gridLines = useMemo(() => {
+    const lines: number[][] = [];
+    const step = venue.gridStep || 0.5;
+    for (let gx = 0; gx <= venue.width + 1e-6; gx += step) {
+      lines.push([gx * PPM, 0, gx * PPM, venue.height * PPM]);
+    }
+    for (let gy = 0; gy <= venue.height + 1e-6; gy += step) {
+      lines.push([0, gy * PPM, venue.width * PPM, gy * PPM]);
+    }
+    return lines;
+  }, [venue.width, venue.height, venue.gridStep]);
 
   const cursor = draggingStage ? "grabbing" : spaceDown ? "grab" : undefined;
 
@@ -886,6 +908,8 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
                 highlightIndex={highlightSeat && highlightSeat.tableId === tbl.id ? highlightSeat.index : null}
                 onSeatClick={(tableId, index) => setPickSeat({ tableId, index })}
                 onSeatContextMenu={(index, p) => openSeatMenu(tbl.id, index, p)}
+                onSeatHover={coarse ? undefined : onSeatHover}
+                onSeatHoverEnd={coarse ? undefined : onSeatHoverEnd}
                 onSelect={select}
                 onDragStartTable={handleDragStart}
                 onDragMove={handleDragMove}
@@ -915,6 +939,8 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
                 highlightIndex={highlightSeat && highlightSeat.tableId === tbl.id ? highlightSeat.index : null}
                 onSeatClick={(tableId, index) => setPickSeat({ tableId, index })}
                 onSeatContextMenu={(index, p) => openSeatMenu(tbl.id, index, p)}
+                onSeatHover={coarse ? undefined : onSeatHover}
+                onSeatHoverEnd={coarse ? undefined : onSeatHoverEnd}
                 onSelect={select}
                 onDragStartTable={handleDragStart}
                 onDragMove={handleDragMove}
@@ -980,6 +1006,11 @@ export function FloorCanvas({ onHelp, onLegend }: { onHelp: () => void; onLegend
         <SeatPickerModal tableId={pickSeat.tableId} index={pickSeat.index} onClose={() => setPickSeat(null)} />
       )}
       {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
+      {seatTip && (
+        <div className="chair-tip" style={{ left: seatTip.x, top: seatTip.y }}>
+          {seatTip.text}
+        </div>
+      )}
     </div>
   );
 }

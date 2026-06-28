@@ -33,6 +33,8 @@ interface Props {
   highlightIndex: number | null;
   onSeatClick: (tableId: string, index: number) => void;
   onSeatContextMenu: (index: number, p: CtxPoint) => void;
+  onSeatHover?: (tip: string, clientX: number, clientY: number) => void;
+  onSeatHoverEnd?: () => void;
   onSelect: (id: string, additive: boolean) => void;
   onDragStartTable: (id: string) => void;
   onDragMove: (id: string, x: number, y: number) => void;
@@ -59,6 +61,8 @@ export function TableNode({
   highlightIndex,
   onSeatClick,
   onSeatContextMenu,
+  onSeatHover,
+  onSeatHoverEnd,
   onSelect,
   onDragStartTable,
   onDragMove,
@@ -162,6 +166,8 @@ export function TableNode({
           tableRotation={table.rotation}
           onClick={() => onSeatClick(table.id, i)}
           onContextMenu={(p) => onSeatContextMenu(i, p)}
+          onHover={onSeatHover}
+          onHoverEnd={onSeatHoverEnd}
         />
       ))}
 
@@ -199,6 +205,7 @@ export function TableNode({
           stroke={stroke}
           strokeWidth={strokeWidth}
           dash={dash}
+          shadowForStrokeEnabled={false}
         />
       ) : (
         <Rect
@@ -211,17 +218,19 @@ export function TableNode({
           stroke={stroke}
           strokeWidth={strokeWidth}
           dash={dash}
+          shadowForStrokeEnabled={false}
         />
       )}
 
-      {/* Label */}
+      {/* Label — round/oval tables read fully horizontal (screen-aligned) regardless of
+          rotation, like the chair initials; rectangles follow the table but stay upright. */}
       <Text
         text={`${label}\n${table.seatCount} ${t("table.seatsShort")}`}
         width={Math.max(wpx, 60)}
         height={hpx}
         offsetX={Math.max(wpx, 60) / 2}
         offsetY={hpx / 2}
-        rotation={readableAngle(table.rotation) - table.rotation}
+        rotation={table.shape === "ellipse" ? -table.rotation : readableAngle(table.rotation) - table.rotation}
         align="center"
         verticalAlign="middle"
         fontSize={12}

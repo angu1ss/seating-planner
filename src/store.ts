@@ -38,6 +38,27 @@ import {
 } from "./geometry";
 
 const STORAGE_KEY = "seating-planner:v1";
+const UPDATED_KEY = "seating-planner:updatedAt";
+
+/** Last content-change time (epoch ms), persisted separately from undo history so it
+ * can compare share-link versions. Survives reloads. */
+function readUpdatedAt(): number {
+  try {
+    const v = Number(localStorage.getItem(UPDATED_KEY));
+    return Number.isFinite(v) && v > 0 ? v : Date.now();
+  } catch {
+    return Date.now();
+  }
+}
+let lastEditAt = readUpdatedAt();
+function bumpUpdatedAt() {
+  lastEditAt = Date.now();
+  try {
+    localStorage.setItem(UPDATED_KEY, String(lastEditAt));
+  } catch {
+    /* storage blocked */
+  }
+}
 
 function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): T {
   let timer: ReturnType<typeof setTimeout>;
@@ -239,6 +260,56 @@ export interface EditorState extends ProjectState {
   getDocument: () => ProjectState;
 }
 
+/** Upgrade a persisted / imported / shared document to the current schema. Idempotent
+ * on already-current documents. Shared by the persist middleware and loadDocument so
+ * imports and share links get migrated too. */
+function migrateDocument(persisted: unknown): ProjectState {
+  let p = persisted as Partial<ProjectState> & {
+    venue?: Venue;
+    tables?: TableModel[];
+    objects?: SceneObject[];
+  };
+  // v0: flat venue/tables/objects -> a single sheet.
+  if (p && !p.sheets) {
+    const sheet: Sheet = {
+      id: crypto.randomUUID(),
+      name: "",
+      venue: p.venue ?? createSheet("").venue,
+      tables: p.tables ?? [],
+      objects: p.objects ?? [],
+    };
+    p = {
+      schemaVersion: p.schemaVersion ?? SCHEMA_VERSION,
+      project: p.project,
+      settings: p.settings,
+      sheets: [sheet],
+      activeSheetId: sheet.id,
+    };
+  }
+  // v1 -> v2: theme moved to app prefs; blank auto-generated hall names so they localize.
+  if (p && Array.isArray(p.sheets)) {
+    const sheets = p.sheets;
+    if (p.settings && "theme" in p.settings) {
+      const settings = { ...p.settings } as Record<string, unknown>;
+      delete settings.theme;
+      p = { ...p, settings: settings as unknown as Settings };
+    }
+    p = {
+      ...p,
+      sheets: sheets.map((sh) => ({
+        ...sh,
+        name: /^Hall \d+$/.test(sh.name) ? "" : sh.name,
+        tables: (sh.tables ?? []).map((tb) => ({ ...tb, groupId: tb.groupId ?? null })),
+      })),
+    };
+  }
+  // v2 -> v3: guests gained gender/relation, lost childAge/vip — normalise them.
+  if (p && Array.isArray(p.guests)) {
+    p = { ...p, guests: p.guests.map(normalizeGuest) };
+  }
+  return p as ProjectState;
+}
+
 export const useStore = create<EditorState>()(
   temporal(
     persist(
@@ -348,7 +419,17 @@ export const useStore = create<EditorState>()(
               assign.set(g.id, { tableId: seat.tableId, index: seat.index });
             }
             if (!assign.size) return {};
-            return { guests: s.guests.map((g) => (assign.has(g.id) ? { ...g, seat: assign.get(g.id)! } : g)) };
+            // A candidate seat may be one currently held by a target we're moving. If that
+            // seat gets reassigned to a higher-priority target but its previous occupant
+            // didn't itself get a new seat, vacate it so two guests never share one chair.
+            const takenKeys = new Set([...assign.values()].map((p) => key(p.tableId, p.index)));
+            return {
+              guests: s.guests.map((g) => {
+                if (assign.has(g.id)) return { ...g, seat: assign.get(g.id)! };
+                if (g.seat && takenKeys.has(key(g.seat.tableId, g.seat.index))) return { ...g, seat: null };
+                return g;
+              }),
+            };
           }),
 
         addSheet: () =>
@@ -944,17 +1025,18 @@ export const useStore = create<EditorState>()(
           }),
 
         loadDocument: (doc) => {
-          const sheets =
-            doc.sheets && doc.sheets.length ? doc.sheets : createInitialState().sheets;
+          // Migrate first so older imported / shared documents upgrade to the current schema.
+          const m = migrateDocument(doc);
+          const sheets = m.sheets && m.sheets.length ? m.sheets : createInitialState().sheets;
           set({
-            schemaVersion: doc.schemaVersion ?? SCHEMA_VERSION,
-            project: doc.project,
-            settings: doc.settings,
+            schemaVersion: SCHEMA_VERSION,
+            project: m.project,
+            settings: m.settings,
             sheets,
-            activeSheetId: doc.activeSheetId && sheets.some((sh) => sh.id === doc.activeSheetId)
-              ? doc.activeSheetId
+            activeSheetId: m.activeSheetId && sheets.some((sh) => sh.id === m.activeSheetId)
+              ? m.activeSheetId
               : sheets[0].id,
-            guests: Array.isArray(doc.guests) ? doc.guests.map(normalizeGuest) : [],
+            guests: Array.isArray(m.guests) ? m.guests.map(normalizeGuest) : [],
             selectedIds: [],
           });
         },
@@ -970,58 +1052,14 @@ export const useStore = create<EditorState>()(
             sheets: s.sheets,
             activeSheetId: s.activeSheetId,
             guests: s.guests,
+            updatedAt: lastEditAt,
           };
         },
       }),
       {
         name: STORAGE_KEY,
         version: 3,
-        migrate: (persisted: unknown) => {
-          let p = persisted as Partial<ProjectState> & {
-            venue?: Venue;
-            tables?: TableModel[];
-            objects?: SceneObject[];
-          };
-          // v0: flat venue/tables/objects -> a single sheet.
-          if (p && !p.sheets) {
-            const sheet: Sheet = {
-              id: crypto.randomUUID(),
-              name: "",
-              venue: p.venue ?? createSheet("").venue,
-              tables: p.tables ?? [],
-              objects: p.objects ?? [],
-            };
-            p = {
-              schemaVersion: p.schemaVersion ?? SCHEMA_VERSION,
-              project: p.project,
-              settings: p.settings,
-              sheets: [sheet],
-              activeSheetId: sheet.id,
-            };
-          }
-          // v1 -> v2: theme moved to app prefs; blank auto-generated hall names so they localize.
-          if (p && Array.isArray(p.sheets)) {
-            const sheets = p.sheets;
-            if (p.settings && "theme" in p.settings) {
-              const settings = { ...p.settings } as Record<string, unknown>;
-              delete settings.theme;
-              p = { ...p, settings: settings as unknown as Settings };
-            }
-            p = {
-              ...p,
-              sheets: sheets.map((sh) => ({
-                ...sh,
-                name: /^Hall \d+$/.test(sh.name) ? "" : sh.name,
-                tables: (sh.tables ?? []).map((tb) => ({ ...tb, groupId: tb.groupId ?? null })),
-              })),
-            };
-          }
-          // v2 -> v3: guests gained gender/relation, lost childAge/vip — normalise them.
-          if (p && Array.isArray(p.guests)) {
-            p = { ...p, guests: p.guests.map(normalizeGuest) };
-          }
-          return p;
-        },
+        migrate: (persisted: unknown) => migrateDocument(persisted),
         partialize: (s) => ({
           schemaVersion: s.schemaVersion,
           project: s.project,
@@ -1047,6 +1085,19 @@ export const useStore = create<EditorState>()(
 );
 
 useStore.temporal.getState().clear();
+
+// Stamp the last content-change time (for share-link version comparison). Decoupled from
+// undo/persist; selection/active-hall changes don't count as content edits.
+useStore.subscribe((s, prev) => {
+  if (
+    s.project !== prev.project ||
+    s.settings !== prev.settings ||
+    s.sheets !== prev.sheets ||
+    s.guests !== prev.guests
+  ) {
+    bumpUpdatedAt();
+  }
+});
 
 export const undo = () => useStore.temporal.getState().undo();
 export const redo = () => useStore.temporal.getState().redo();

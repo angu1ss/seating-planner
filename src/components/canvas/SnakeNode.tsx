@@ -23,6 +23,8 @@ interface Props {
   highlightIndex: number | null;
   onSeatClick: (tableId: string, index: number) => void;
   onSeatContextMenu: (index: number, p: CtxPoint) => void;
+  onSeatHover?: (tip: string, clientX: number, clientY: number) => void;
+  onSeatHoverEnd?: () => void;
   onSelect: (id: string, additive: boolean) => void;
   onDragStartTable: (id: string) => void;
   onDragMove: (id: string, x: number, y: number) => void;
@@ -50,6 +52,8 @@ export function SnakeNode({
   highlightIndex,
   onSeatClick,
   onSeatContextMenu,
+  onSeatHover,
+  onSeatHoverEnd,
   onSelect,
   onDragStartTable,
   onDragMove,
@@ -166,6 +170,8 @@ export function SnakeNode({
           tableRotation={table.rotation}
           onClick={() => onSeatClick(table.id, i)}
           onContextMenu={(p) => onSeatContextMenu(i, p)}
+          onHover={onSeatHover}
+          onHoverEnd={onSeatHoverEnd}
         />
       ))}
 

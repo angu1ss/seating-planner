@@ -142,4 +142,6 @@ export interface ProjectState {
   sheets: Sheet[];
   activeSheetId: string;
   guests: Guest[];
+  /** Epoch ms of the last content change — used to compare share-link versions. */
+  updatedAt?: number;
 }

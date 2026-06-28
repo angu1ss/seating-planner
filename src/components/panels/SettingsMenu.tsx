@@ -6,9 +6,11 @@ import { AppActions } from "./AppActions";
 export function SettingsMenu({
   onProjectSettings,
   onExport,
+  onShare,
 }: {
   onProjectSettings: () => void;
   onExport: () => void;
+  onShare: () => void;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -55,6 +57,16 @@ export function SettingsMenu({
           >
             <Icon name="export" />
             <span>{t("export.title")}…</span>
+          </button>
+          <button
+            className="menu-item"
+            onClick={() => {
+              setOpen(false);
+              onShare();
+            }}
+          >
+            <Icon name="share" />
+            <span>{t("share.title")}…</span>
           </button>
           <button
             className="menu-item"

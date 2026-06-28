@@ -12,10 +12,11 @@ interface Props {
   onToggleGuests: () => void;
   onSettings: () => void;
   onExport: () => void;
+  onShare: () => void;
   showLeftToggle?: boolean;
 }
 
-export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, showLeftToggle }: Props) {
+export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, onShare, showLeftToggle }: Props) {
   const t = useT();
   const project = useStore((s) => s.project);
   const setProjectMeta = useStore((s) => s.setProjectMeta);
@@ -76,6 +77,10 @@ export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, sh
               <Icon name="export" />
               <span className="label">{t("export.title")}</span>
             </button>
+            <button className="btn" onClick={onShare} title={t("share.title")} aria-label={t("share.title")}>
+              <Icon name="share" />
+              <span className="label">{t("share.title")}</span>
+            </button>
             <button
               className="icon-btn"
               onClick={onSettings}
@@ -86,7 +91,7 @@ export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, sh
             </button>
           </>
         ) : (
-          <SettingsMenu onProjectSettings={onSettings} onExport={onExport} />
+          <SettingsMenu onProjectSettings={onSettings} onExport={onExport} onShare={onShare} />
         )}
       </div>
     </header>

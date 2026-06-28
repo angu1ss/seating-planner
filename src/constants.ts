@@ -10,7 +10,9 @@ import type {
   TableShape,
 } from "./types";
 
-export const SCHEMA_VERSION = 1;
+/** Document schema version — kept in step with the persist `version` in store.ts so
+ * exported/shared/imported files carry the real version and can be migrated on load. */
+export const SCHEMA_VERSION = 3;
 
 /** How far a chair sits outside the table edge, meters. */
 export const CHAIR_OFFSET = 0.32;
@@ -144,5 +146,6 @@ export function createInitialState(): ProjectState {
     sheets: [sheet],
     activeSheetId: sheet.id,
     guests: [],
+    updatedAt: Date.now(),
   };
 }

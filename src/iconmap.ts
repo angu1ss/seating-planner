@@ -48,8 +48,17 @@ import {
   faFilePdf,
   faFileCode,
   faRingsWedding,
+  faShareNodes,
+  faCopy,
+  faCheck,
 } from "@fortawesome/pro-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import {
+  guestRoleLabelKey,
+  ageLabelKey,
+  guestFeatureLabelKey,
+  sexLabelKey,
+} from "./constants";
 import type {
   AgeCategory,
   ChairStyle,
@@ -89,7 +98,10 @@ export type UiIconName =
   | "chevron"
   | "keyboard"
   | "pdf"
-  | "code";
+  | "code"
+  | "share"
+  | "copy"
+  | "check";
 
 export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   import: faFileImport,
@@ -119,6 +131,9 @@ export const UI_ICONS: Record<UiIconName, IconDefinition> = {
   keyboard: faKeyboard,
   pdf: faFilePdf,
   code: faFileCode,
+  share: faShareNodes,
+  copy: faCopy,
+  check: faCheck,
 };
 
 export const EVENT_ICONS: Record<EventType, IconDefinition> = {
@@ -198,6 +213,18 @@ export function guestBadges(guest: Guest): CornerBadges {
     corners[slot] = FEATURE_ICONS[f];
   }
   return corners;
+}
+
+/** Reverse map: a guest badge icon → its i18n label key, for hover tooltips. */
+const BADGE_LABEL_KEY = new Map<IconDefinition, string>();
+for (const [role, ic] of Object.entries(ROLE_ICONS)) if (ic) BADGE_LABEL_KEY.set(ic, guestRoleLabelKey(role as GuestRole));
+for (const [age, ic] of Object.entries(AGE_ICONS)) if (ic) BADGE_LABEL_KEY.set(ic, ageLabelKey(age as AgeCategory));
+for (const [f, ic] of Object.entries(FEATURE_ICONS)) BADGE_LABEL_KEY.set(ic, guestFeatureLabelKey(f as GuestFeature));
+for (const [s, ic] of Object.entries(SEX_ICONS)) BADGE_LABEL_KEY.set(ic, sexLabelKey(s as Sex));
+
+/** The i18n label key for a guest badge icon (role/age/feature/sex), if known. */
+export function iconLabelKey(def: IconDefinition): string | undefined {
+  return BADGE_LABEL_KEY.get(def);
 }
 
 // Custom / role / feature icons are added here as the Guests module lands —

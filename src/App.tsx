@@ -14,6 +14,11 @@ import { ShortcutsModal } from "./components/panels/ShortcutsModal";
 import { ProjectSettingsModal } from "./components/panels/ProjectSettingsModal";
 import { WelcomeModal } from "./components/panels/WelcomeModal";
 import { ExportModal } from "./components/panels/ExportModal";
+import { ShareModal } from "./components/panels/ShareModal";
+import { ShareLoadModal, type ShareLoadKind } from "./components/panels/ShareLoadModal";
+import { readShareLink, isShareHash, hashDocument, isEmptyDocument } from "./utils/share";
+import { downloadJSON, slugify } from "./utils/file";
+import type { ProjectState } from "./types";
 import { preparePlanPages, type PlanPage } from "./export/plan";
 import { buildPrintContext, type PrintContext } from "./print/context";
 import { PrintGuestList } from "./print/PrintGuestList";
@@ -49,6 +54,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guestsOpen, setGuestsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareLoad, setShareLoad] = useState<{ kind: ShareLoadKind; doc?: ProjectState; linkNewer?: boolean } | null>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const printing = useRef(false);
@@ -84,15 +91,23 @@ export default function App() {
 
   const isDesktop = useMediaQuery("(min-width: 721px)");
   const [guestsWidth, setGuestsWidth] = useState(() => {
-    const v = Number(localStorage.getItem("seating:guestsWidth"));
-    return v >= 280 ? v : 320;
+    try {
+      const v = Number(localStorage.getItem("seating:guestsWidth"));
+      return v >= 280 ? v : 320;
+    } catch {
+      return 320; // storage blocked (private mode / sandboxed iframe)
+    }
   });
   // When the guests panel is widened, fold the left panel into a drawer (like mobile).
   const leftDrawer = isDesktop && guestsWidth > 360;
   const resizing = useRef<{ x: number; w: number } | null>(null);
 
   useEffect(() => {
-    localStorage.setItem("seating:guestsWidth", String(guestsWidth));
+    try {
+      localStorage.setItem("seating:guestsWidth", String(guestsWidth));
+    } catch {
+      /* storage blocked — ignore */
+    }
   }, [guestsWidth]);
 
   const onResizeDown = (e: ReactPointerEvent) => {
@@ -114,9 +129,47 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  // A shared project arrives in the URL fragment (#p=...). On open, decode it, ask before
+  // replacing the current project, then strip the hash so a refresh doesn't re-prompt.
+  useEffect(() => {
+    if (!isShareHash(window.location.hash)) return;
+    let alive = true;
+    void (async () => {
+      const doc = await readShareLink(window.location.hash);
+      // Strip the hash up front so a refresh doesn't re-prompt.
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (!alive) return;
+      if (!doc) {
+        setShareLoad({ kind: "invalid" });
+        return;
+      }
+      const current = useStore.getState().getDocument();
+      // Identical content → nothing to do (no prompt).
+      if (hashDocument(doc) === hashDocument(current)) return;
+      // Empty/default current project → just load it, no prompt.
+      if (isEmptyDocument(current)) {
+        useStore.getState().loadDocument(doc);
+        setOnboarded(true);
+        return;
+      }
+      // Otherwise confirm: same project (different version) vs a different project.
+      const sameProject = Boolean(doc.project?.id) && doc.project.id === current.project?.id;
+      setShareLoad({
+        kind: sameProject ? "update" : "different",
+        doc,
+        linkNewer: (doc.updatedAt ?? 0) >= (current.updatedAt ?? 0),
+      });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [setOnboarded]);
+
   // Show the welcome flow whenever the app isn't onboarded — first run, or after a full
   // reset (which clears the flag). Existing non-empty projects are marked onboarded silently.
   useEffect(() => {
+    // Don't pop the welcome flow when arriving via a share link — that flow handles itself.
+    if (isShareHash(window.location.hash)) return;
     if (onboarded) {
       setWelcomeOpen(false);
       return;
@@ -149,15 +202,24 @@ export default function App() {
   // Once a print job renders, open the browser print dialog, then clean up.
   useEffect(() => {
     if (!printJob) return;
+    let settled = false;
     const done = () => {
+      if (settled) return;
+      settled = true;
       setPrintJob(null);
       printing.current = false;
     };
     window.addEventListener("afterprint", done, { once: true });
+    // Fallback: some browsers don't fire `afterprint` when the dialog is cancelled —
+    // the window regains focus instead. Without this the busy lock could stick forever.
+    const onFocus = () => window.setTimeout(done, 300);
+    window.addEventListener("focus", onFocus, { once: true });
     const id = window.setTimeout(() => window.print(), 80);
     return () => {
       window.clearTimeout(id);
       window.removeEventListener("afterprint", done);
+      window.removeEventListener("focus", onFocus);
+      printing.current = false;
     };
   }, [printJob]);
 
@@ -189,6 +251,7 @@ export default function App() {
         onToggleGuests={() => setGuestsOpen((v) => !v)}
         onSettings={() => setSettingsOpen(true)}
         onExport={() => setExportOpen(true)}
+        onShare={() => setShareOpen(true)}
         showLeftToggle={leftDrawer}
       />
       <div className="body">
@@ -242,6 +305,28 @@ export default function App() {
           onPrintPlan={runPlanPrint}
           onPrintGuests={printGuests}
           onPrintCards={printCards}
+        />
+      )}
+      {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
+      {shareLoad && (
+        <ShareLoadModal
+          kind={shareLoad.kind}
+          linkNewer={shareLoad.linkNewer}
+          onSave={
+            shareLoad.doc
+              ? () => downloadJSON(useStore.getState().getDocument(), `${slugify(projectName)}.json`)
+              : undefined
+          }
+          onConfirm={
+            shareLoad.doc
+              ? () => {
+                  useStore.getState().loadDocument(shareLoad.doc!);
+                  setOnboarded(true);
+                  setShareLoad(null);
+                }
+              : undefined
+          }
+          onClose={() => setShareLoad(null)}
         />
       )}
       {welcomeOpen && <WelcomeModal onClose={closeWelcome} />}

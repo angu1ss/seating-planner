@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Theme } from "./types";
@@ -47,6 +48,26 @@ const en: Dict = {
   "export.escortHint": "Print: name → table, for the entrance",
   "export.project": "Project file",
   "export.projectHint": "Download as .json (backup)",
+  "share.title": "Share",
+  "share.copy": "Copy link",
+  "share.copied": "Copied",
+  "share.warning":
+    "The link is a snapshot of the project as it is right now — re-open Share after edits to get an updated link.",
+  "share.hint":
+    "Anyone with the link can open the project. Very long links may be truncated by some messengers — use the project file for large projects.",
+  "share.error": "Couldn't build the link.",
+  "shareLoad.invalidTitle": "Broken link",
+  "shareLoad.invalid": "This share link is damaged or incomplete. Ask for a fresh link.",
+  "shareLoad.differentTitle": "Open shared project?",
+  "shareLoad.different":
+    "This link contains a different project. Opening it replaces your current project — save the current one first if you still need it.",
+  "shareLoad.updateTitle": "Update from link?",
+  "shareLoad.update": "This link is another version of your current project.",
+  "shareLoad.updateNewer": "The link looks newer.",
+  "shareLoad.updateOlder": "The link looks older than your current version.",
+  "shareLoad.saveCurrent": "Save current project",
+  "shareLoad.openBtn": "Open",
+  "shareLoad.updateBtn": "Update",
   "export.byTable": "By table",
   "export.alphabetical": "Alphabetical",
   "export.empty": "empty",
@@ -127,7 +148,6 @@ const en: Dict = {
   "left.length": "Length, m",
   "left.gridStep": "Grid step, m",
   "left.snapToGrid": "Snap to grid",
-  "left.parameters": "Parameters",
   "left.defaultChair": "Default chair",
   "left.minSpacing": "Min. width per guest, m",
   "left.apply": "Apply size",
@@ -148,8 +168,6 @@ const en: Dict = {
   "chair.inherit": "As project",
 
   "table.word": "Table",
-  "table.noSelection": "Nothing selected.",
-  "table.noSelectionHint": "Add a table or element on the left, then click it on the canvas to edit its properties.",
   "table.name": "Name",
   "table.shape": "Shape",
   "table.axisX": "Axis X, m",
@@ -166,18 +184,13 @@ const en: Dict = {
   "table.selected": "Selected",
   "table.mixed": "—",
   "table.bulkHint": "Fields with differing values are locked.",
-  "table.listTitle": "Tables",
-  "table.listEmpty": "No tables yet.",
   "table.lock": "Lock",
   "table.unlock": "Unlock",
   "table.weld": "Join",
   "table.unweld": "Separate",
   "table.weldHint": "Join touching rectangular tables into one row.",
-  "table.welded": "Joined",
 
   "snake.band": "Band width, m",
-  "snake.addNode": "Add node",
-  "snake.removeNode": "Remove node",
   "snake.nodes": "Nodes",
   "snake.editHint": "Drag the nodes on the canvas. Double-click the band to add a node, a node to remove it.",
 
@@ -191,7 +204,6 @@ const en: Dict = {
   "modal.custom": "Table settings",
   "modal.quantity": "Quantity",
 
-  "obj.section": "Interior elements",
   "obj.add": "Add decorations",
   "obj.object": "Interior element",
   "elements.title": "Elements",
@@ -211,8 +223,6 @@ const en: Dict = {
   "obj.lock": "Lock",
   "obj.unlock": "Unlock",
   "obj.locked": "Locked",
-  "obj.listTitle": "Objects on the plan",
-  "obj.listEmpty": "No objects yet.",
 
   "zoom.in": "Zoom in",
   "zoom.out": "Zoom out",
@@ -276,6 +286,26 @@ const ru: Dict = {
   "export.escortHint": "Печать: имя → стол, для входа",
   "export.project": "Файл проекта",
   "export.projectHint": "Скачать .json (резервная копия)",
+  "share.title": "Поделиться",
+  "share.copy": "Копировать ссылку",
+  "share.copied": "Скопировано",
+  "share.warning":
+    "Ссылка — это снимок проекта на текущий момент. После изменений откройте «Поделиться» заново, чтобы получить новую ссылку.",
+  "share.hint":
+    "Любой, у кого есть ссылка, откроет проект. Очень длинные ссылки некоторые мессенджеры обрезают — для больших проектов используйте файл проекта.",
+  "share.error": "Не удалось сформировать ссылку.",
+  "shareLoad.invalidTitle": "Битая ссылка",
+  "shareLoad.invalid": "Ссылка повреждена или неполная. Попросите новую ссылку.",
+  "shareLoad.differentTitle": "Открыть проект из ссылки?",
+  "shareLoad.different":
+    "В ссылке другой проект. Он заменит текущий — сначала сохраните текущий, если он ещё нужен.",
+  "shareLoad.updateTitle": "Обновить из ссылки?",
+  "shareLoad.update": "В ссылке другая версия текущего проекта.",
+  "shareLoad.updateNewer": "Похоже, версия в ссылке новее.",
+  "shareLoad.updateOlder": "Похоже, версия в ссылке старее текущей.",
+  "shareLoad.saveCurrent": "Сохранить текущий проект",
+  "shareLoad.openBtn": "Открыть",
+  "shareLoad.updateBtn": "Обновить",
   "export.byTable": "По столам",
   "export.alphabetical": "По алфавиту",
   "export.empty": "пусто",
@@ -356,7 +386,6 @@ const ru: Dict = {
   "left.length": "Длина, м",
   "left.gridStep": "Шаг сетки, м",
   "left.snapToGrid": "Привязка к сетке",
-  "left.parameters": "Параметры",
   "left.defaultChair": "Стул по умолчанию",
   "left.minSpacing": "Мин. место на гостя, м",
   "left.apply": "Применить размер",
@@ -377,8 +406,6 @@ const ru: Dict = {
   "chair.inherit": "Как в проекте",
 
   "table.word": "Стол",
-  "table.noSelection": "Ничего не выбрано.",
-  "table.noSelectionHint": "Добавьте стол или элемент слева и кликните по нему на холсте, чтобы изменить свойства.",
   "table.name": "Название",
   "table.shape": "Форма",
   "table.axisX": "Ось X, м",
@@ -395,18 +422,13 @@ const ru: Dict = {
   "table.selected": "Выбрано",
   "table.mixed": "—",
   "table.bulkHint": "Поля с разными значениями заблокированы.",
-  "table.listTitle": "Столы",
-  "table.listEmpty": "Столов пока нет.",
   "table.lock": "Заблокировать",
   "table.unlock": "Разблокировать",
   "table.weld": "Соединить",
   "table.unweld": "Разъединить",
   "table.weldHint": "Соедините прилегающие прямоугольные столы в один ряд.",
-  "table.welded": "Соединён",
 
   "snake.band": "Ширина ленты, м",
-  "snake.addNode": "Добавить узел",
-  "snake.removeNode": "Убрать узел",
   "snake.nodes": "Узлы",
   "snake.editHint": "Перетаскивайте узлы на холсте. Двойной клик по ленте — добавить узел, по узлу — удалить.",
 
@@ -420,7 +442,6 @@ const ru: Dict = {
   "modal.custom": "Настройки стола",
   "modal.quantity": "Количество",
 
-  "obj.section": "Элементы интерьера",
   "obj.add": "Добавить декорации",
   "obj.object": "Элемент интерьера",
   "elements.title": "Элементы",
@@ -440,8 +461,6 @@ const ru: Dict = {
   "obj.lock": "Заблокировать",
   "obj.unlock": "Разблокировать",
   "obj.locked": "Заблокирован",
-  "obj.listTitle": "Объекты на плане",
-  "obj.listEmpty": "Объектов пока нет.",
 
   "zoom.in": "Приблизить",
   "zoom.out": "Отдалить",
@@ -513,8 +532,9 @@ export function translate(lang: Lang, key: string): string {
   return messages[lang][key] ?? messages.en[key] ?? key;
 }
 
-/** Hook returning a translate function bound to the current language. */
+/** Hook returning a translate function bound to the current language. Memoised so the
+ * returned `t` is stable across renders (safe as a dependency / memo prop). */
 export function useT() {
   const lang = useI18n((s) => s.lang);
-  return (key: string) => translate(lang, key);
+  return useMemo(() => (key: string) => translate(lang, key), [lang]);
 }
