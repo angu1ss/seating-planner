@@ -10,7 +10,11 @@ const CACHE = "seating-" + BUILD_ID;
 
 // Install: warm the cache with the app shell. allSettled so one miss (e.g. "./"
 // on a host that doesn't serve a directory index) doesn't abort the whole install.
+// skipWaiting() so a freshly deployed worker activates immediately instead of waiting
+// for every tab to close — the page reloads onto it (see src/pwa.ts), so users never
+// get stuck on a stale cached build.
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE).then((cache) => Promise.allSettled(PRECACHE.map((u) => cache.add(u)))),
   );

@@ -15,6 +15,7 @@ import { ProjectSettingsModal } from "./components/panels/ProjectSettingsModal";
 import { WelcomeModal } from "./components/panels/WelcomeModal";
 import { ExportModal } from "./components/panels/ExportModal";
 import { ShareModal } from "./components/panels/ShareModal";
+import { AboutModal } from "./components/panels/AboutModal";
 import { ShareLoadModal, type ShareLoadKind } from "./components/panels/ShareLoadModal";
 import { readShareLink, isShareHash, hashDocument, isEmptyDocument } from "./utils/share";
 import { downloadJSON, slugify } from "./utils/file";
@@ -55,6 +56,7 @@ export default function App() {
   const [guestsOpen, setGuestsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [shareLoad, setShareLoad] = useState<{ kind: ShareLoadKind; doc?: ProjectState; linkNewer?: boolean } | null>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
@@ -252,6 +254,7 @@ export default function App() {
         onSettings={() => setSettingsOpen(true)}
         onExport={() => setExportOpen(true)}
         onShare={() => setShareOpen(true)}
+        onAbout={() => setAboutOpen(true)}
         showLeftToggle={leftDrawer}
       />
       <div className="body">
@@ -298,7 +301,9 @@ export default function App() {
       {addObjOpen && <AddObjectModal onClose={() => setAddObjOpen(false)} />}
       {helpOpen && <ShortcutsModal onClose={() => setHelpOpen(false)} />}
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
-      {settingsOpen && <ProjectSettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <ProjectSettingsModal onClose={() => setSettingsOpen(false)} onAbout={() => setAboutOpen(true)} />
+      )}
       {exportOpen && (
         <ExportModal
           onClose={() => setExportOpen(false)}
@@ -308,6 +313,7 @@ export default function App() {
         />
       )}
       {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
+      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
       {shareLoad && (
         <ShareLoadModal
           kind={shareLoad.kind}

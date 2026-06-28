@@ -13,10 +13,11 @@ interface Props {
   onSettings: () => void;
   onExport: () => void;
   onShare: () => void;
+  onAbout: () => void;
   showLeftToggle?: boolean;
 }
 
-export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, onShare, showLeftToggle }: Props) {
+export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, onShare, onAbout, showLeftToggle }: Props) {
   const t = useT();
   const project = useStore((s) => s.project);
   const setProjectMeta = useStore((s) => s.setProjectMeta);
@@ -30,13 +31,20 @@ export function Toolbar({ onToggleLeft, onToggleGuests, onSettings, onExport, on
         <button className={`icon-btn ${showLeftToggle ? "" : "only-mobile"}`} onClick={onToggleLeft} aria-label="menu">
           ☰
         </button>
-        <img
-          className="app-logo only-desktop"
-          src={`${import.meta.env.BASE_URL}logo.svg`}
-          alt=""
-          width={26}
-          height={26}
-        />
+        <button
+          className="app-logo-btn only-desktop"
+          onClick={onAbout}
+          title={t("about.title")}
+          aria-label={t("about.title")}
+        >
+          <img
+            className="app-logo"
+            src={`${import.meta.env.BASE_URL}logo.svg`}
+            alt=""
+            width={26}
+            height={26}
+          />
+        </button>
         <span className="app-title">{t("app.fullName")}</span>
         <div className="project-name-display only-desktop">
           <Icon icon={EVENT_ICONS[project.eventType]} size={15} />

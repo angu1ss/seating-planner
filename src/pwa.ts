@@ -39,9 +39,13 @@ export function registerPwa() {
 
   initInstallPrompt();
 
+  // A new worker auto-activates (skipWaiting in sw.js) and claims the page; reload onto
+  // it so the user always runs the freshest build. Guard on `hadController` so the very
+  // first install (no prior controller) doesn't trigger a needless reload.
+  const hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloading) return;
+    if (reloading || !hadController) return;
     reloading = true;
     window.location.reload();
   });
@@ -49,6 +53,27 @@ export function registerPwa() {
   window.addEventListener("load", () => {
     void registerWorker();
   });
+}
+
+/**
+ * Last-resort "get me the newest version" escape hatch: unregister all service workers,
+ * delete every cache, then reload bypassing the HTTP cache. Wired to a button in
+ * Project Settings so a stale cache can never permanently strand the user.
+ */
+export async function hardRefreshApp(): Promise<void> {
+  try {
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (typeof caches !== "undefined") {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch {
+    /* ignore — reload anyway */
+  }
+  window.location.reload();
 }
 
 async function registerWorker() {

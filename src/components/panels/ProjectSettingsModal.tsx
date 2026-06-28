@@ -14,14 +14,16 @@ import {
   applyPwaUpdate,
   checkForPwaUpdate,
   promptInstall,
+  hardRefreshApp,
   isPwaStandalone,
 } from "../../pwa";
 
 interface Props {
   onClose: () => void;
+  onAbout: () => void;
 }
 
-export function ProjectSettingsModal({ onClose }: Props) {
+export function ProjectSettingsModal({ onClose, onAbout }: Props) {
   const t = useT();
   const project = useStore((s) => s.project);
   const setProjectMeta = useStore((s) => s.setProjectMeta);
@@ -156,37 +158,41 @@ export function ProjectSettingsModal({ onClose }: Props) {
               />
             </label>
 
-            {(isPwaStandalone || canInstall) && (
-              <div className="pwa-section">
-                <span className="field-caption">{t("pwa.section")}</span>
-                {isPwaStandalone ? (
-                  <>
-                    <div className="pwa-row">
-                      <span className="muted">
-                        {t("pwa.version")} {__APP_VERSION__}
-                      </span>
-                      {updateReady ? (
-                        <button className="btn primary" onClick={applyPwaUpdate}>
-                          <Icon name="import" /> {t("pwa.update")}
-                        </button>
-                      ) : (
-                        <button className="btn" onClick={onCheckUpdate} disabled={checking}>
-                          <Icon name="redo" /> {checking ? t("pwa.checking") : t("pwa.check")}
-                        </button>
-                      )}
-                    </div>
-                    {updateReady && <p className="muted pwa-hint">{t("pwa.updateAvailable")}</p>}
-                  </>
-                ) : (
-                  <div className="pwa-row">
-                    <span className="muted">{t("pwa.installHint")}</span>
-                    <button className="btn primary" onClick={promptInstall}>
-                      <Icon name="import" /> {t("pwa.install")}
+            <div className="pwa-section">
+              <span className="field-caption">{t("pwa.section")}</span>
+              {canInstall && (
+                <div className="pwa-row">
+                  <span className="muted">{t("pwa.installHint")}</span>
+                  <button className="btn primary" onClick={promptInstall}>
+                    <Icon name="import" /> {t("pwa.install")}
+                  </button>
+                </div>
+              )}
+              {isPwaStandalone && (
+                <div className="pwa-row">
+                  <span className="muted">{updateReady ? t("pwa.updateAvailable") : ""}</span>
+                  {updateReady ? (
+                    <button className="btn primary" onClick={applyPwaUpdate}>
+                      <Icon name="import" /> {t("pwa.update")}
                     </button>
-                  </div>
-                )}
+                  ) : (
+                    <button className="btn" onClick={onCheckUpdate} disabled={checking}>
+                      <Icon name="redo" /> {checking ? t("pwa.checking") : t("pwa.check")}
+                    </button>
+                  )}
+                </div>
+              )}
+              {/* Version (click → About) on the left, force-update on the right; hint below. */}
+              <div className="pwa-row">
+                <button className="link-btn" onClick={onAbout} title={t("about.title")}>
+                  {t("pwa.version")} {__APP_VERSION__}
+                </button>
+                <button className="btn" onClick={() => void hardRefreshApp()}>
+                  <Icon name="redo" /> {t("pwa.refresh")}
+                </button>
               </div>
-            )}
+              <p className="muted pwa-hint">{t("pwa.refreshHint")}</p>
+            </div>
 
             <div className="row-actions">
               <button className="btn" onClick={() => fileRef.current?.click()}>

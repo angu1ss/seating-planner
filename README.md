@@ -1,5 +1,7 @@
 # Seating Planner
 
+[![CI](https://github.com/angu1ss/seating-planner/actions/workflows/ci.yml/badge.svg)](https://github.com/angu1ss/seating-planner/actions/workflows/ci.yml)
+
 A browser app for arranging tables and seating guests at events (weddings, banquets, conferences). Everything runs client‑side: autosave to `localStorage` plus project export/import as `.json`. EN/RU localization, light/dark theme, responsive for desktop, tablet and phone.
 
 Stack: React + TypeScript + Vite, Konva (react‑konva) for the canvas, Zustand for state, Font Awesome Pro for icons.

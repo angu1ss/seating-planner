@@ -50,7 +50,10 @@ function pwaServiceWorker(): Plugin {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), pwaServiceWorker()],
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+  },
   // Relative base so the build works both on a static host and on GitHub Pages
   // (project subpath), and when served by nginx.
   base: "./",

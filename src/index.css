@@ -1003,6 +1003,47 @@ button.editor-help,
 .share-row .btn { flex: none; white-space: nowrap; }
 .share-hint { font-size: 12px; margin: 6px 0 0; }
 
+/* ---- Clickable logo + version (open About) ---- */
+.app-logo-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+}
+.app-logo-btn:hover { opacity: 0.85; }
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+.link-btn:hover { color: var(--accent); text-decoration: underline; }
+
+/* ---- About modal ---- */
+.about-modal { width: min(420px, 94vw); }
+.about-body { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.about-logo { margin-top: 4px; }
+.about-name { margin: 2px 0 0; font-size: 18px; }
+.about-desc { margin: 0 0 6px; font-size: 13px; max-width: 320px; }
+.about-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 14px;
+  margin: 4px 0 10px;
+  font-size: 13px;
+  text-align: left;
+}
+.about-grid dt { color: var(--muted); }
+.about-grid dd { margin: 0; font-weight: 600; }
+.about-gh { text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+
 /* ---- Chair hover tooltip (desktop) ---- */
 .chair-tip {
   position: fixed;
